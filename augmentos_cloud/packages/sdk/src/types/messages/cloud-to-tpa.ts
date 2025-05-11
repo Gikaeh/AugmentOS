@@ -7,6 +7,7 @@ import { AppSettings, TpaConfig } from '../models';
 import { LocationUpdate, CalendarEvent } from './glasses-to-cloud';
 import { DashboardMode } from '../dashboard';
 import { TpaSession } from 'src/tpa/session';
+import { MediaState, MediaMetadata, MediaSessionEnded } from '../media';
 
 //===========================================================
 // Responses
@@ -50,6 +51,30 @@ export interface SettingsUpdate extends BaseMessage {
   type: CloudToTpaMessageType.SETTINGS_UPDATE;
   packageName: string;
   settings: AppSettings;
+}
+
+/**
+ * Media state update to TPA
+ */
+export interface MediaStateUpdate extends BaseMessage {
+  type: CloudToTpaMessageType.MEDIA_STATE_UPDATE;
+  data: MediaState;
+}
+
+/**
+ * Media metadata update to TPA
+ */
+export interface MediaMetadataUpdate extends BaseMessage {
+  type: CloudToTpaMessageType.MEDIA_METADATA_UPDATE;
+  data: MediaMetadata;
+}
+
+/**
+ * Media session end update to TPA
+ */
+export interface MediaSessionEndedUpdate extends BaseMessage {
+  type: CloudToTpaMessageType.MEDIA_SESSION_ENDED_UPDATE;
+  data: MediaSessionEnded;
 }
 
 //===========================================================
@@ -154,7 +179,10 @@ export type CloudToTpaMessage =
   | CalendarEvent
   | DataStream
   | DashboardModeChanged
-  | DashboardAlwaysOnChanged;
+  | DashboardAlwaysOnChanged
+  | MediaStateUpdate
+  | MediaMetadataUpdate
+  | MediaSessionEndedUpdate;
 
 //===========================================================
 // Type guards
@@ -190,4 +218,16 @@ export function isDashboardModeChanged(message: CloudToTpaMessage): message is D
 
 export function isDashboardAlwaysOnChanged(message: CloudToTpaMessage): message is DashboardAlwaysOnChanged {
   return message.type === CloudToTpaMessageType.DASHBOARD_ALWAYS_ON_CHANGED;
+}
+
+export function isMediaStateUpdate(message: CloudToTpaMessage): message is MediaStateUpdate {
+  return message.type === CloudToTpaMessageType.MEDIA_STATE_UPDATE;
+}
+
+export function isMediaMetadataUpdate(message: CloudToTpaMessage): message is MediaMetadataUpdate {
+  return message.type === CloudToTpaMessageType.MEDIA_METADATA_UPDATE;
+}
+
+export function isMediaSessionEndedUpdate(message: CloudToTpaMessage): message is MediaSessionEndedUpdate {
+  return message.type === CloudToTpaMessageType.MEDIA_SESSION_ENDED_UPDATE;
 }

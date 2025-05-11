@@ -33,6 +33,11 @@ export enum StreamType {
   
   // Video streams
   VIDEO = 'video',
+
+  // Media streams
+  MEDIA_STATE = 'media_state',
+  MEDIA_METADATA = 'media_metadata',
+  MEDIA_SESSION_ENDED = 'media_session_ended',
   
   // Special subscription types
   ALL = 'all',

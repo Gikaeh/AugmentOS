@@ -23,6 +23,9 @@ export * from './layouts';
 // Dashboard types
 export * from './dashboard';
 
+// Media types
+export * from './media';
+
 // Other system enums
 export * from './enums';
 

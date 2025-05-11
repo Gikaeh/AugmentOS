@@ -9,6 +9,7 @@ import { EventManager, EventData, StreamDataTypes } from './events';
 import { LayoutManager } from './layouts';
 import { SettingsManager } from './settings';
 import { ResourceTracker } from '../../utils/resource-tracker';
+import { MediaControls } from './media';
 import {
   // Message types
   TpaToCloudMessage,
@@ -26,6 +27,7 @@ import {
   PhoneNotification,
   TranscriptionData,
   TranslationData,
+  MediaControlCommand,
 
   // Type guards
   isTpaConnectionAck,
@@ -35,6 +37,9 @@ import {
   isSettingsUpdate,
   isDashboardModeChanged,
   isDashboardAlwaysOnChanged,
+  isMediaStateUpdate,
+  isMediaMetadataUpdate,
+  isMediaSessionEndedUpdate,
 
   // Other types
   AppSettings,
@@ -132,6 +137,8 @@ export class TpaSession {
   public readonly settings: SettingsManager;
   /** 📊 Dashboard management interface */
   public readonly dashboard: DashboardAPI;
+  /** Media management interface */
+  public readonly media: MediaControls;
 
   constructor(private config: TpaSessionConfig) {
     // Set defaults and merge with provided config
@@ -189,6 +196,11 @@ export class TpaSession {
     // Import DashboardManager dynamically to avoid circular dependency
     const { DashboardManager } = require('./dashboard');
     this.dashboard = new DashboardManager(this, this.send.bind(this));
+
+    // Initialize media controls
+    this.media = new MediaControls(this.events, (command: MediaControlCommand) => {
+      this.send(command);
+    });
   }
   
   /**
@@ -898,6 +910,18 @@ export class TpaSession {
           } catch (error) {
             console.error('Error handling dashboard always-on change:', error);
           }
+        }
+        // Handle media state update
+        else if (isMediaStateUpdate(message)) {
+          this.events.emit(StreamType.MEDIA_STATE, message.data);
+        }
+        // Handle media metadate update
+        else if (isMediaMetadataUpdate(message)) {
+          this.events.emit(StreamType.MEDIA_METADATA, message.data);
+        } 
+        // Handle media session end or no found media
+        else if (isMediaSessionEndedUpdate(message)) {
+          this.events.emit(StreamType.MEDIA_SESSION_ENDED, message.data);
         }
         // Handle unrecognized message types gracefully
         else {

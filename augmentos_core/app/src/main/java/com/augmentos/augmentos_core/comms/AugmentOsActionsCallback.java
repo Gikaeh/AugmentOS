@@ -29,4 +29,7 @@ public interface AugmentOsActionsCallback {
     void updateGlassesBrightness(int brightness);
     void updateGlassesAutoBrightness(boolean autoBrightness);
     void updateGlassesHeadUpAngle(int headUpAngle);
+    void sendMediaState(JSONObject mediaStateData);
+    void sendMediaMetadata(JSONObject mediaMetadata);
+    void sendMediaSessionEnded(JSONObject sessionEndedData);
 }

@@ -17,6 +17,7 @@ public class AugmentOsManagerMessageParser {
     public void parseMessage(String json) throws JSONException {
             JSONObject commandObject = new JSONObject(json);
             String command = commandObject.getString("command");
+            String data = commandObject.getString("data");
 
             switch (command) {
                 case "ping":
@@ -145,6 +146,24 @@ public class AugmentOsManagerMessageParser {
                 case "update_glasses_headUp_angle":
                     int headUpAngle = commandObject.getJSONObject("params").getInt("headUpAngle");
                     callback.updateGlassesHeadUpAngle(headUpAngle);
+                    break;
+
+                case "send_media_state":
+                    if (data != null && callback != null) {
+                        callback.sendMediaState(data);
+                    }
+                    break;
+
+                case "send_media_metadata":
+                    if (data != null && callback != null) {
+                        callback.sendMediaMetadata(data);
+                    }
+                    break;
+
+                case "send_media_session_ended":
+                    if (data != null && callback != null) {
+                        callback.sendMediaSessionEnded(data);
+                    }
                     break;
 
                 default:

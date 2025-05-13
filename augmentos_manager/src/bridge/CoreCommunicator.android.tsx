@@ -10,6 +10,14 @@ import {
 import {check, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import BleManager from 'react-native-ble-manager';
 import BackendServerComms from '../backend_comms/BackendServerComms';
+// Ensure same structure from sdk
+import {
+  CloudToTpaMessageType,
+  TpaToCloudMessageType,
+  MediaState,
+  MediaMetadata,
+  MediaSessionEnded,
+} from '../../../augmentos_cloud/packages/sdk/src/types'; 
 
 // For checking if location services are enabled
 const {ServiceStarter} = NativeModules;

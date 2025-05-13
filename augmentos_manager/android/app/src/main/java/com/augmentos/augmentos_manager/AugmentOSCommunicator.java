@@ -122,6 +122,21 @@ public class AugmentOSCommunicator {
         }
     }
 
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onMediaUpdate(MediaUpdateEvent event) {
+        Log.d(TAG, "Received MediaUpdateEvent via EventBus. EventName: " + event.eventName + ", Data: " + event.jsonData.substring(0, Math.min(event.jsonData.length(),100)));
+        try {
+            JSONObject json = new JSONObject();
+            json.put("source", "media_control"); 
+            json.put("eventName", event.eventName); // e.g., "media_state", "media_metadata"
+            json.put("data", new JSONObject(event.jsonData)); // event.jsonData is already a JSON string of MediaState/Metadata
+
+            processCoreMessage(json.toString()); // Sends to CoreCommunicator.android.tsx
+        } catch (JSONException e) {
+            Log.e(TAG, "Error creating JSON for MediaUpdateEvent in AugmentOSCommunicator: " + e.getMessage(), e);
+        }
+    }
+
     // Check if initialized
     public boolean isInitialized() {
         return isInitialized;

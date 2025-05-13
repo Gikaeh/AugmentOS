@@ -243,6 +243,7 @@ public class MediaControlManager {
                         mediaControllerCallback.onPlaybackStateChanged(state); 
                     } else {
                         mediaControllerCallback.onPlaybackStateChanged(null); // Send even if null
+                    }
                     // Check if media has metadate
                     if (metadata != null) {
                         mediaControllerCallback.onMetadataChanged(metadata); 

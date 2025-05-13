@@ -121,4 +121,26 @@ public class NotificationServiceModule extends ReactContextBaseJavaModule {
     public void removeListeners(int count) {
         Log.d(TAG, "removeListeners: Removed " + count + " listeners");
     }
+
+    @ReactMethod
+    public void mediaControlPlay(Promise promise) {
+        try {
+            EventBus.getDefault().post(new MediaControlEvent(MediaControlEvent.ACTION_PLAY));
+            Log.d(TAG, "Posted PLAY MediaControlEvent to EventBus");
+            promise.resolve("Play command posted to EventBus.");
+        } catch (Exception e) {
+            promise.reject("ERR_MEDIA_PLAY", "Error posting PLAY MediaControlEvent.", e);
+        }
+    }
+
+    @ReactMethod
+    public void mediaControlPlay(Promise promise) {
+        try {
+            EventBus.getDefault().post(new MediaControlEvent(MediaControlEvent.ACTION_PAUSE));
+            Log.d(TAG, "Posted PAUSE MediaControlEvent to EventBus");
+            promise.resolve("Pause command posted to EventBus.");
+        } catch (Exception e) {
+            promise.reject("ERR_MEDIA_PAUSE", "Error posting PAUSE MediaControlEvent.", e);
+        }
+    }
 }

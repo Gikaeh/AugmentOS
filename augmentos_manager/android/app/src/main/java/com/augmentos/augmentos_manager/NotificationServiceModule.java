@@ -134,7 +134,7 @@ public class NotificationServiceModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void mediaControlPlay(Promise promise) {
+    public void mediaControlPause(Promise promise) {
         try {
             EventBus.getDefault().post(new MediaControlEvent(MediaControlEvent.ACTION_PAUSE));
             Log.d(TAG, "Posted PAUSE MediaControlEvent to EventBus");

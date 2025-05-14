@@ -17,7 +17,7 @@ public class AugmentOsManagerMessageParser {
     public void parseMessage(String json) throws JSONException {
             JSONObject commandObject = new JSONObject(json);
             String command = commandObject.getString("command");
-            String data = commandObject.getString("data");
+            JSONObject data = commandObject.optJSONObject("data");
 
             switch (command) {
                 case "ping":

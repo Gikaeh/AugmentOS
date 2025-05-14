@@ -83,6 +83,8 @@ import com.augmentos.augmentos_core.tpa.EdgeTPASystem;
 import com.augmentos.augmentoslib.events.GlassesTapOutputEvent;
 import com.augmentos.augmentoslib.events.HomeScreenEvent;
 import com.augmentos.augmentoslib.events.SmartRingButtonOutputEvent;
+import com.augmentos.augmentoslib.events.CoreToManagerOutputEvent;
+import com.augmentos.augmentoslib.AugmentOSLibBus;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;

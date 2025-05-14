@@ -438,7 +438,7 @@ public class ServerComms {
                 Log.w(TAG, "Cannot send media_state_update, WebSocket not connected or wsManager is null.");
             }
         } catch (JSONException e) {
-            Log.e(TAG, "Error building media_state_update JSON")
+            Log.e(TAG, "Error building media_state_update JSON");
         }
     }
 

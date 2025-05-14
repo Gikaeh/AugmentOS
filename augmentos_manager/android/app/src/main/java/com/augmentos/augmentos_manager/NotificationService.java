@@ -1,5 +1,6 @@
 package com.augmentos.augmentos_manager;
 
+import android.content.ComponentName;
 import android.app.Notification;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -32,7 +33,9 @@ import java.util.Map;
 public class NotificationService extends NotificationListenerService implements MediaControlManager.MediaEventListener {
     private static final String TAG = "NotificationListener";
     private static ReactApplicationContext reactContext;
+    private Handler mainThreadHandler;
     
+    private ComponentName listenerComponentName;
     private MediaControlManager mediaControlManager;
     private Handler periodicCheckHandler;
     private static final long MEDIA_SESSION_CHECK_INTERVAL_MS = 5000;
@@ -61,10 +64,10 @@ public class NotificationService extends NotificationListenerService implements 
         super.onCreate();
         Log.d(TAG, "Service Created");
         listenerComponentName = new ComponentName(this, NotificationService.class);
-        mediaControlManager = new MediaControlManager(this, listenerComponentNamem this);
+        mediaControlManager = new MediaControlManager(this, listenerComponentName, this);
 
-        if (!EventBus.getDefault().isRegistered()) {
-            EventBus.getDefault.register(this);
+        if (!EventBus.getDefault().isRegistered(this)) {
+            EventBus.getDefault().register(this);
         }
 
         periodicCheckHandler = new Handler(Looper.getMainLooper());
@@ -98,8 +101,8 @@ public class NotificationService extends NotificationListenerService implements 
             mediaControlManager.cleanup();
             mediaControlManager = null;
         }
-        if (EventBus.getDefault().isRegistered()) {
-            EventBus.getDefault().Unregister(this);
+        if (EventBus.getDefault().isRegistered(this)) {
+            EventBus.getDefault().unregister(this);
         }
         if (periodicCheckHandler != null) {
             periodicCheckHandler.removeCallbacks(periodicMediaSessionCheckRunnable);
@@ -213,11 +216,11 @@ public class NotificationService extends NotificationListenerService implements 
 
     @Override
     public void onMediaUpdate(String eventName, String jsonDataString) {
-        Log.d(TAG, "MediaUpdate received in NotificationService. Event: " + eventName + ", Data: " + jsonDataString.substring(0, Math.min(jsonDataString.Length(), 100)));
+        Log.d(TAG, "MediaUpdate received in NotificationService. Event: " + eventName + ", Data: " + jsonDataString.substring(0, Math.min(jsonDataString.length(), 100)));
         EventBus.getDefault().post(new MediaUpdateEvent(eventName, jsonDataString));
     }
 
-    @Subscribe(ThreadMode = ThreadMode.Main)
+    @Subscribe(threadMode = ThreadMode.MAIN)
     public void onMediaControlEvent(MediaControlEvent event) {
         Log.d(TAG, "MediaControlEvent received in NotificationService via EventBus: " + event.action + (event.action.equals(MediaControlEvent.ACTION_SEEK) ? " val: " + event.value : ""));
         if (mediaControlManager != null) {

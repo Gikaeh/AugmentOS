@@ -6,10 +6,13 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import androidx.media.session.MediaControllerCompat;
-import androidx.media.session.MediaSessionManager;
-import androidx.media.session.PlaybackStateCompat;
-import androidx.media.MediaMetadataCompat;
+import android.media.session.MediaSessionManager;
+import android.media.session.MediaController;
+import android.media.session.MediaSession;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.MediaMetadataCompat;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -178,7 +181,7 @@ public class MediaControlManager {
         }
         List<MediaControllerCompat> controllersCompat;
         try {
-            List<android.media.session.MediaController> controllers = mediaSessionManager.getActiveSessions(listenerComponentName); // Grabs all active session of media
+            List<MediaController> controllers = mediaSessionManager.getActiveSessions(listenerComponentName); // Grabs all active session of media
             if (controllers == null || controllers.isEmpty()) {
                  if (activeMediaController != null) {
                     Log.d(TAG, "No active media sessions found by manager, current controller (" + activeMediaController.getPackageName() + ") might be stale or session ended without destroy callback.");
@@ -196,8 +199,14 @@ public class MediaControlManager {
             }
 
             controllersCompat = new java.util.ArrayList<>();
-            for (android.media.session.MediaController mc : controllers) {
-                controllersCompat.add(new MediaControllerCompat(context, mc.getSessionToken()));
+            for (MediaController mc : controllers) {
+                MediaSession.Token platformToken = mc.getSessionToken();
+                MediaSessionCompat.Token compatToken = MediaSessionCompat.Token.fromToken(platformToken);
+                if (compatToken != null) {
+                    controllersCompat.add(new MediaControllerCompat(context, compatToken));
+                } else {
+                    Log.w(TAG, "Failed to create MediaSessionCompat.Token for controller: " + mc.getPackageName());
+                }
             }
 
         } catch (SecurityException se) {

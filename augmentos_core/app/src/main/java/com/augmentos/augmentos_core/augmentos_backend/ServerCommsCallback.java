@@ -18,5 +18,5 @@ public interface ServerCommsCallback {
 
     void onMicrophoneStateChange(boolean isEnabled);
 
-    void onMediaControlCommand(JSONObject commandJson)
+    void onMediaControlCommand(JSONObject commandJson);
 }

@@ -11,10 +11,11 @@ public class MediaControlEvent {
     public static final String ACTION_SEEK = "SEEK";
 
     public final String action;
-    public final long value = -1; // For SEEK, value is in milliseconds. For other actions, can be -1 or ignored.
+    public final long value; // For SEEK, value is in milliseconds. For other actions, can be -1 or ignored.
 
     public MediaControlEvent(String action) {
         this.action = action;
+        this.value = -1;
     }
 
     public MediaControlEvent(String action, long value) {

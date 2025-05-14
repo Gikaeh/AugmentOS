@@ -119,6 +119,7 @@ dependencies {
     // AndroidX libraries
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.core:core-ktx:1.10.1'
+    implementation "androidx.legacy:legacy-support-v4:1.0.0"
 
     // AugmentOSLib project dependency
     implementation project(path: ':AugmentOSLib')

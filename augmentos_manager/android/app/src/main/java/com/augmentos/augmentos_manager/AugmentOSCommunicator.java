@@ -130,7 +130,7 @@ public class AugmentOSCommunicator {
         Log.d(TAG, "Received MediaUpdateEvent via EventBus. EventName: " + event.eventName + ", Data: " + event.jsonData.substring(0, Math.min(event.jsonData.length(),100)));
         try {
             JSONObject json = new JSONObject();
-            json.put("source", "media_control"); 
+            json.put("source", ManagerMediaConstants.NATIVE_TO_JS_SOURCE_PHONE_MEDIA_UPDATE); 
             json.put("eventName", event.eventName); // e.g., "media_state", "media_metadata"
             json.put("data", new JSONObject(event.jsonData)); // event.jsonData is already a JSON string of MediaState/Metadata
 

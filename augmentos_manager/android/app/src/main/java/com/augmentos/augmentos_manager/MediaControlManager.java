@@ -23,19 +23,17 @@ import java.util.Objects;
 public class MediaControlManager {
     private static final String TAG = "MediaControlManager";
 
-    public static final String MEDIA_STATE_CHANGED = "media_state";
-    public static final String MEDIA_METADATA_CHANGED = "media_metadata";
-    public static final String MEDIA_SESSION_ENDED = "media_session_ended";
-
     private MediaSessionManager mediaSessionManager;
     private MediaControllerCompat activeMediaController;
     private MediaControllerCompat.Callback mediaControllerCallback;
+    private final MediaEventListener eventListener; // To send updates (e.g., to NotificationService)
+
     private final ComponentName listenerComponentName; // ComponentName of NotificationService
+
     private String currentTrackId = ""; // To avoid redundant metadata updates
     private String currentPackageName = ""; // To track current media app package
 
     private final Context context;
-    private final MediaEventListener eventListener; // To send updates (e.g., to NotificationService)
     private final Handler mainHandler; // For posting callbacks on the main thread
 
     public interface MediaEventListener {
@@ -70,9 +68,9 @@ public class MediaControlManager {
                         JSONObject playbackStateJson = new JSONObject();
                         if (state != null) {
                             playbackStateJson.put("status", getPlaybackStatusString(state.getState())); // Status of playback (e.g., Playing == 3, Pausing == 2)
-                            playbackStateJson.put("position", state.getPosition() / 1000); // Position in seconds
                             playbackStateJson.put("speed", state.getPlaybackSpeed()); // Current speed of media (e.g., 1.0, 0.0 paused)
                             playbackStateJson.put("actions", state.getActions()); // Available actions bitmask
+                            playbackStateJson.put("position", currentPositionMs/1000);
                             if (state.getState() == PlaybackStateCompat.STATE_ERROR) {
                                 CharSequence errorMessage = state.getErrorMessage();
                                 playbackStateJson.put("error", errorMessage != null ? errorMessage.toString() : "Unknown error");
@@ -83,7 +81,7 @@ public class MediaControlManager {
                             playbackStateJson.put("speed", 0.0f);
                             playbackStateJson.put("actions", 0L);
                         }
-                        eventListener.onMediaUpdate(MEDIA_STATE_CHANGED, playbackStateJson.toString());
+                        eventListener.onMediaUpdate(ManagerMediaConstants.MEDIA_EVENT_STATE_CHANGED, playbackStateJson.toString());
                     } catch (JSONException e) {
                         Log.e(TAG, "JSONException in onPlaybackStateChanged: " + e.getMessage(), e);
                     }
@@ -127,7 +125,7 @@ public class MediaControlManager {
                                 metadataJson.put("album", JSONObject.NULL);
                                 metadataJson.put("duration", 0);
                             }
-                            eventListener.onMediaUpdate(MEDIA_METADATA_CHANGED, metadataJson.toString());
+                            eventListener.onMediaUpdate(ManagerMediaConstants.MEDIA_EVENT_METADATA_CHANGED, metadataJson.toString());
                         } catch (JSONException e) {
                             Log.e(TAG, "JSONException in onMetadataChanged: " + e.getMessage(), e);
                         }
@@ -147,7 +145,7 @@ public class MediaControlManager {
                     try {
                         JSONObject sessionEndedJson = new JSONObject();
                         sessionEndedJson.put("packageName", destroyedPackageName);
-                        eventListener.onMediaUpdate(MEDIA_SESSION_ENDED, sessionEndedJson.toString());
+                        eventListener.onMediaUpdate(ManagerMediaConstants.MEDIA_EVENT_SESSION_ENDED, sessionEndedJson.toString());
                     } catch (JSONException e) {
                         Log.e(TAG, "JSONException in onSessionDestroyed: " + e.getMessage(), e);
                     }
@@ -191,7 +189,7 @@ public class MediaControlManager {
                         try {
                             JSONObject noSessionJson = new JSONObject();
                             noSessionJson.put("packageName", lastPackageName);
-                            eventListener.onMediaUpdate(MEDIA_SESSION_ENDED, noSessionJson.toString());
+                            eventListener.onMediaUpdate(ManagerMediaConstants.MEDIA_EVENT_SESSION_ENDED, noSessionJson.toString());
                         } catch (Exception e) { Log.e(TAG, "Error sending no active session event: " + e.getMessage(), e); }
                     }
                 } else { Log.d(TAG, "No active media sessions found by manager, and no active controller was being tracked."); }
@@ -286,7 +284,7 @@ public class MediaControlManager {
                     try {
                         JSONObject noSessionJson = new JSONObject();
                         noSessionJson.put("packageName", lastPackageName);
-                        eventListener.onMediaUpdate(MEDIA_SESSION_ENDED, noSessionJson.toString());
+                        eventListener.onMediaUpdate(, noSessionJson.toString());
                     } catch (Exception e) {
                         Log.e(TAG, "Error sending no active session event: " + e.getMessage(), e);
                     }
@@ -311,19 +309,19 @@ public class MediaControlManager {
         MediaControllerCompat.TransportControls transportControls = activeMediaController.getTransportControls();
         try {
             switch (action.toUpperCase()) {
-                case MediaControlEvent.ACTION_PLAY:
+                case ManagerMediaConstants.MEDIA_ACTION_PLAY:
                     transportControls.play();
                     break;
 
-                case MediaControlEvent.ACTION_PAUSE:
+                case ManagerMediaConstants.MEDIA_ACTION_PAUSE:
                     transportControls.pause();
                     break;
 
-                case MediaControlEvent.ACTION_NEXT:
+                case ManagerMediaConstants.MEDIA_ACTION_NEXT:
                     transportControls.skipToNext();
                     break;
 
-                case MediaControlEvent.ACTION_PREVIOUS:
+                case anagerMediaConstants.MEDIA_ACTION_PREVIOUS:
                     transportControls.skipToPrevious();
                     break;
 

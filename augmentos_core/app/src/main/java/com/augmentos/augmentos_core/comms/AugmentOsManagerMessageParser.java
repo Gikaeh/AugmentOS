@@ -148,19 +148,19 @@ public class AugmentOsManagerMessageParser {
                     callback.updateGlassesHeadUpAngle(headUpAngle);
                     break;
 
-                case "send_media_state":
+                case "core_send_media_state":
                     if (data != null && callback != null) {
                         callback.sendMediaState(data);
                     }
                     break;
 
-                case "send_media_metadata":
+                case "core_send_media_metadata":
                     if (data != null && callback != null) {
                         callback.sendMediaMetadata(data);
                     }
                     break;
 
-                case "send_media_session_ended":
+                case "core_send_media_session_ended":
                     if (data != null && callback != null) {
                         callback.sendMediaSessionEnded(data);
                     }

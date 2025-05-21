@@ -125,7 +125,7 @@ public class NotificationServiceModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void mediaControlPlay(Promise promise) {
         try {
-            EventBus.getDefault().post(new MediaControlEvent(MediaControlEvent.ACTION_PLAY));
+            EventBus.getDefault().post(new MediaControlEvent(ManagerMediaConstants.MEDIA_ACTION_PLAY));
             Log.d(TAG, "Posted PLAY MediaControlEvent to EventBus");
             promise.resolve("Play command posted to EventBus.");
         } catch (Exception e) {
@@ -141,6 +141,28 @@ public class NotificationServiceModule extends ReactContextBaseJavaModule {
             promise.resolve("Pause command posted to EventBus.");
         } catch (Exception e) {
             promise.reject("ERR_MEDIA_PAUSE", "Error posting PAUSE MediaControlEvent.", e);
+        }
+    }
+
+    @ReactMethod
+    public void mediaControlNext(Promise promise) {
+        try {
+            EventBus.getDefault().post(new MediaControlEvent(MediaControlEvent.MEDIA_ACTION_NEXT));
+            Log.d(TAG, "Posted NEXT MediaControlEvent to EventBus");
+            promise.resolve("Next command posted to EventBus.");
+        } catch (Exception e) {
+            promise.reject("ERR_MEDIA_NEXT", "Error posting NEXT MediaControlEvent.", e);
+        }
+    }
+
+    @ReactMethod
+    public void mediaControlPrevious(Promise promise) {
+        try {
+            EventBus.getDefault().post(new MediaControlEvent(ManagerMediaConstants.MEDIA_ACTION_PREVIOUS));
+            Log.d(TAG, "Posted PREVIOUS MediaControlEvent to EventBus");
+            promise.resolve("Previous command posted to EventBus.");
+        } catch (Exception e) {
+            promise.reject("ERR_MEDIA_PREVIOUS", "Error posting PREVIOUS MediaControlEvent.", e);
         }
     }
 }

@@ -682,12 +682,12 @@ public class ServerComms {
                 Log.d(TAG, "Server is requesting a reconnect.");
                 break;
 
-            case "media_control":
+            case "phone_media_control":
                 Log.d(TAG, "Received phone_media_control command from cloud: " + msg.toString());
                 if (serverCommsCallback != null) {
                     serverCommsCallback.onMediaControlCommand(msg);
                 } else {
-                    Log.w(TAG, "serverCommsCallback is null, cannot process media_control command.");
+                    Log.w(TAG, "serverCommsCallback is null, cannot process phone_media_control command.");
                 }
                 break;
 

@@ -222,7 +222,7 @@ public class NotificationService extends NotificationListenerService implements 
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onMediaControlEvent(MediaControlEvent event) {
-        Log.d(TAG, "MediaControlEvent received in NotificationService via EventBus: " + event.action + (event.action.equals(MediaControlEvent.ACTION_SEEK) ? " val: " + event.value : ""));
+        Log.d(TAG, "MediaControlEvent received in NotificationService via EventBus: " + event.action + (event.action.equals(ManagerMediaConstants.MEDIA_ACTION_SEEK) ? " val: " + event.value : ""));
         if (mediaControlManager != null) {
             mediaControlManager.handleMediaControlCommand(event.action, event.value);
         }

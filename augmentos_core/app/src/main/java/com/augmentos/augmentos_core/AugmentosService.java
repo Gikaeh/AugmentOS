@@ -1281,7 +1281,7 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
                     AugmentOSLibBus.getInstance().post(new CoreToManagerOutputEvent(messageForManagerJs.toString()));
                     Log.d(TAG, "AugmentosService: Posted CoreToManagerOutputEvent for phone_media_control.");
                 } catch (JSONException e) {
-                    Log.e(TAG, "AugmentosService: Error wrapping/relaying media_control command via ServerCommsCallback", e);
+                    Log.e(TAG, "AugmentosService: Error wrapping/relaying phone_media_control command via ServerCommsCallback", e);
                 }
             }
         });

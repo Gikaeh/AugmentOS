@@ -36,4 +36,6 @@ public interface ServerCommsCallback {
     void onAppStarted(String packageName);
     void onAppStopped(String packageName);
     void onSettingsUpdate(JSONObject settings);
+
+    void onMediaControlCommand(JSONObject commandJson);
 }

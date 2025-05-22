@@ -10,11 +10,24 @@ import {
 import {check, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import BleManager from 'react-native-ble-manager';
 import BackendServerComms from '../backend_comms/BackendServerComms';
+import {
+  CloudToTpaMessageType,
+  MediaState,
+  MediaMetadata,
+  MediaSessionEnded,
+  MediaStateUpdate,
+  MediaMetadataUpdate,
+  MediaSessionEndedUpdate,
+  CloudToCoreMessageTypes, 
+  MediaActionCommands, 
+  NativeToJsMessageSources, 
+  PhoneMediaEventNames
+} from '../types/message-types';
+import {CloudSentMediaCommand, NativeMediaEventData} from '../utils/MediaUtils';
 
 // For checking if location services are enabled
-const {ServiceStarter} = NativeModules;
+const {ServiceStarter, CoreCommsService, NotificationServiceUtils} = NativeModules;
 
-const {CoreCommsService} = NativeModules;
 const eventEmitter = new NativeEventEmitter(CoreCommsService);
 
 export class CoreCommunicator extends EventEmitter {
@@ -225,6 +238,59 @@ export class CoreCommunicator extends EventEmitter {
     if (!data) return;
 
     try {
+      if (data.source === NativeToJsMessageSources.PHONE_MEDIA_UPDATE) {
+        const mediaEvent = data as NativeMediaEventData;
+
+        if (INTENSE_LOGGING) {
+          console.log(`CoreCommunicator: Received ${NativeToJsMessageSources.PHONE_MEDIA_UPDATE} from native: ${mediaEvent}`);
+        }
+
+        let cloudMessage: MediaStateUpdate | MediaMetadataUpdate | MediaSessionEndedUpdate | null = null;
+
+        switch (mediaEvent.eventName) {
+          case PhoneMediaEventNames.MEDIA_STATE_CHANGED:
+            cloudMessage = {type: CloudToTpaMessageType.MEDIA_STATE_UPDATE, data: mediaEvent.data as MediaState};
+            break;
+          
+          case PhoneMediaEventNames.MEDIA_METADATA_CHANGED:
+            cloudMessage = {type: CloudToTpaMessageType.MEDIA_METADATA_UPDATE, data: mediaEvent.data as MediaMetadata};
+            break;
+
+          case PhoneMediaEventNames.MEDIA_SESSION_ENDED:
+            cloudMessage = {type: CloudToTpaMessageType.MEDIA_SESSION_ENDED_UPDATE, data: mediaEvent.data as MediaSessionEnded};
+            break;
+
+          default:
+            console.warn(`CoreCommunicator: unknown media eventName: ${mediaEvent.eventName}`);
+            return;
+        }
+
+        if (cloudMessage) {
+          console.log(`CoreCommunicator: Relaying media update to cloud via core: ${cloudMessage}`);
+          this.sendData({
+            command: 'core_send_media_state',
+            data: cloudMessage
+          }).catch(error => console.error(`CoreCommunicator: Error sending media state too core for cloud relay: ${error}`));
+        }
+        return;
+      }
+
+      if (data.source === NativeToJsMessageSources.CLOUD_SENT_COMMAND) {
+        const sentCommand = data.command as CloudSentMediaCommand;
+
+        if (INTENSE_LOGGING) {
+          console.log(`CoreCommunicator: Received ${NativeToJsMessageSources.CLOUD_SENT_COMMAND} from native: ${sentCommand}`);
+        }
+
+        if (sentCommand && sentCommand.type === CloudToCoreMessageTypes.PHONE_MEDIA_CONTROL) {
+          this.handleMediaControlCommandFromCloud(sentCommand);
+        } else {
+          console.warn(`CoreCommunicator: Received ${NativeToJsMessageSources.CLOUD_SENT_COMMAND} from native: ${sentCommand}`);
+        }
+
+        return;
+      }
+
       if ('status' in data) {
         console.log('Received status update from Core:', data);
         this.emit('statusUpdateReceived', data);
@@ -631,6 +697,39 @@ export class CoreCommunicator extends EventEmitter {
   }
 
   
+
+  private async handleMediaControlCommandFromCloud(command: CloudSentMediaCommand) {
+    console.log(`CoreCommunicator: handling media control command from cloud: ${command.action}`, command.value !== undefined ? `Value: ${command.value}` : "");
+
+    try {
+      switch (command.action) {
+        case MediaActionCommands.PLAY:
+          await NotificationServiceUtils.mediaControlPlay();
+          console.log("CoreCommunicator: Called mediaControlPlay()");
+          break;
+
+        case MediaActionCommands.PAUSE:
+          await NotificationServiceUtils.mediaControlPause();
+          console.log("CoreCommunicator: Called mediaControlPause()")
+          break;
+
+        case MediaActionCommands.NEXT:
+          await NotificationServiceUtils.mediaControlNext();
+          console.log("CoreCommunicator: Called mediaControlNext()")
+          break;
+
+        case MediaActionCommands.PREVIOUS:
+          await NotificationServiceUtils.mediaControlPrevious();
+          console.log("CoreCommunicator: Called mediaControlPrevious()")
+          break;
+
+        default:
+          console.warn(`CoreCommunicator: Unknown media control action from cloud: ${command.action}`);
+      }
+    } catch (e) {
+      console.error(`CoreCommunicator: Error executing media control command '${command.action}': ${e}`);
+    }
+  }
 
   async stopService() {
     // Clean up any active listeners

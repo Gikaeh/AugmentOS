@@ -21,6 +21,10 @@ import {
   NotificationDismissed,
   AudioChunk,
   CalendarEvent,
+  // Media data types
+  MediaState,
+  MediaMetadata,
+  MediaSessionEnded,
   // Language stream helpers
   createTranscriptionStream,
   isValidLanguageCode,
@@ -68,6 +72,9 @@ export interface StreamDataTypes {
   [StreamType.NOTIFICATION_DISMISSED]: NotificationDismissed;
   [StreamType.AUDIO_CHUNK]: AudioChunk;
   [StreamType.VIDEO]: ArrayBuffer;
+  [StreamType.MEDIA_STATE]: MediaState;
+  [StreamType.MEDIA_METADATA]: MediaMetadata;
+  [StreamType.MEDIA_SESSION_ENDED]: MediaSessionEnded;
   [StreamType.OPEN_DASHBOARD]: never;
   [StreamType.START_APP]: never;
   [StreamType.STOP_APP]: never;
@@ -187,6 +194,18 @@ export class EventManager {
 
   onCalendarEvent(handler: Handler<CalendarEvent>) {
     return this.addHandler(StreamType.CALENDAR_EVENT, handler);
+  }
+
+  onMediaStateChanged(handler: Handler<MediaState>): () => void {
+    return this.addHandler(StreamType.MEDIA_STATE, handler);
+  }
+
+  onMediaMetadataChanged(handler: Handler<MediaMetadata>): () => void {
+    return this.addHandler(StreamType.MEDIA_METADATA, handler);
+  }
+
+  onMediaSessionEnded(handler: Handler<MediaSessionEnded>): () => void {
+    return this.addHandler(StreamType.MEDIA_SESSION_ENDED, handler);
   }
 
   /**

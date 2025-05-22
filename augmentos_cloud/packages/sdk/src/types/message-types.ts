@@ -89,7 +89,9 @@ export enum TpaToCloudMessageType {
   // Dashboard requests
   DASHBOARD_CONTENT_UPDATE = 'dashboard_content_update',
   DASHBOARD_MODE_CHANGE = 'dashboard_mode_change',
-  DASHBOARD_SYSTEM_UPDATE = 'dashboard_system_update'
+  DASHBOARD_SYSTEM_UPDATE = 'dashboard_system_update',
+
+  PHONE_MEDIA_CONTROL = 'phone_media_control'
 }
 
 /**
@@ -107,6 +109,11 @@ export enum CloudToTpaMessageType {
   // Dashboard updates
   DASHBOARD_MODE_CHANGED = 'dashboard_mode_changed',
   DASHBOARD_ALWAYS_ON_CHANGED = 'dashboard_always_on_changed',
+
+  // Media updates
+  MEDIA_STATE_UPDATE = 'media_state_update',
+  MEDIA_METADATA_UPDATE = 'media_metadata_update',
+  MEDIA_SESSION_ENDED_UPDATE = 'media_session_ended_update',
   
   // Stream data
   DATA_STREAM = 'data_stream',

@@ -36,4 +36,7 @@ public interface AugmentOsActionsCallback {
     void requestWifiScan();
     void setPreferredMic(String mic);
     void setServerUrl(String url);
+    void sendMediaState(JSONObject mediaStateData);
+    void sendMediaMetadata(JSONObject mediaMetadata);
+    void sendMediaSessionEnded(JSONObject sessionEndedData);
 }

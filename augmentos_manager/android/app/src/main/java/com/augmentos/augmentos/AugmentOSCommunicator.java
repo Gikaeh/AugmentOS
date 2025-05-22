@@ -11,6 +11,9 @@ import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * Singleton class for managing communication with AugmentOS Core
  * Replaces the foreground service approach with a direct singleton pattern
@@ -119,6 +122,21 @@ public class AugmentOSCommunicator {
             Log.d(TAG, "Sent notification to core: " + notificationJson);
         } catch (Exception e) {
             Log.e(TAG, "Failed to process notification event", e);
+        }
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onMediaUpdate(MediaUpdateEvent event) {
+        Log.d(TAG, "Received MediaUpdateEvent via EventBus. EventName: " + event.eventName + ", Data: " + event.jsonData.substring(0, Math.min(event.jsonData.length(),100)));
+        try {
+            JSONObject json = new JSONObject();
+            json.put("source", ManagerMediaConstants.NATIVE_TO_JS_SOURCE_PHONE_MEDIA_UPDATE); 
+            json.put("eventName", event.eventName); // e.g., "media_state", "media_metadata"
+            json.put("data", new JSONObject(event.jsonData)); // event.jsonData is already a JSON string of MediaState/Metadata
+
+            processCoreMessage(json.toString()); // Sends to CoreCommunicator.android.tsx
+        } catch (JSONException e) {
+            Log.e(TAG, "Error creating JSON for MediaUpdateEvent in AugmentOSCommunicator: " + e.getMessage(), e);
         }
     }
 

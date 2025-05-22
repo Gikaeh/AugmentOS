@@ -1,5 +1,6 @@
 package com.augmentos.augmentos;
 
+import android.content.ComponentName;
 import android.app.Notification;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -13,6 +14,9 @@ import android.util.Log;
 
 // import androidx.preference.PreferenceManager;
 
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -26,10 +30,15 @@ import android.os.Looper;
 import java.util.HashMap;
 import java.util.Map;
 
-public class NotificationService extends NotificationListenerService {
-
+public class NotificationService extends NotificationListenerService implements MediaControlManager.MediaEventListener {
     private static final String TAG = "NotificationListener";
     private static ReactApplicationContext reactContext;
+    private Handler mainThreadHandler;
+    
+    private ComponentName listenerComponentName;
+    private MediaControlManager mediaControlManager;
+    private Handler periodicCheckHandler;
+    private static final long MEDIA_SESSION_CHECK_INTERVAL_MS = 5000;
 
     public static void setReactApplicationContext(ReactApplicationContext context) {
         reactContext = context;
@@ -56,7 +65,28 @@ public class NotificationService extends NotificationListenerService {
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "Service Created");
+        listenerComponentName = new ComponentName(this, NotificationService.class);
+        mediaControlManager = new MediaControlManager(this, listenerComponentName, this);
+
+        if (!EventBus.getDefault().isRegistered(this)) {
+            EventBus.getDefault().register(this);
+        }
+
+        periodicCheckHandler = new Handler(Looper.getMainLooper());
     }
+
+    private final Runnable periodicMediaSessionCheckRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (mediaControlManager != null) {
+                Log.d(TAG, "Performing periodic media session check.");
+                mediaControlManager.checkForActiveSessions();
+            }
+            if (periodicCheckHandler != null) {
+                periodicCheckHandler.postDelayed(this, MEDIA_SESSION_CHECK_INTERVAL_MS);
+            }
+        }
+    };
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -68,6 +98,21 @@ public class NotificationService extends NotificationListenerService {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "Service Destroyed");
+        
+        if (mediaControlManager != null) {
+            mediaControlManager.cleanup();
+            mediaControlManager = null;
+        }
+        if (EventBus.getDefault().isRegistered(this)) {
+            EventBus.getDefault().unregister(this);
+        }
+        if (periodicCheckHandler != null) {
+            periodicCheckHandler.removeCallbacks(periodicMediaSessionCheckRunnable);
+            periodicCheckHandler = null;
+        }
+
+        mainThreadHandler.removeCallbacksAndMessages(null);
+        reactContext = null;
     }
 
     @Override
@@ -186,15 +231,44 @@ public class NotificationService extends NotificationListenerService {
     }
 
     @Override
+    public void onMediaUpdate(String eventName, String jsonDataString) {
+        Log.d(TAG, "MediaUpdate received in NotificationService. Event: " + eventName + ", Data: " + jsonDataString.substring(0, Math.min(jsonDataString.length(), 100)));
+        EventBus.getDefault().post(new MediaUpdateEvent(eventName, jsonDataString));
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onMediaControlEvent(MediaControlEvent event) {
+        Log.d(TAG, "MediaControlEvent received in NotificationService via EventBus: " + event.action + (event.action.equals(ManagerMediaConstants.MEDIA_ACTION_SEEK) ? " val: " + event.value : ""));
+        if (mediaControlManager != null) {
+            mediaControlManager.handleMediaControlCommand(event.action, event.value);
+        }
+    }
+
+    @Override
     public void onListenerConnected() {
         super.onListenerConnected();
         Log.d(TAG, "Listener Connected");
+
+        if (mediaControlManager != null) {
+            mainThreadHandler.postDelayed(() -> {
+                Log.d(TAG, "Performing initial media session check (onListenerConnected.)");
+                mediaControlManager.checkForActiveSessions();
+            }, 500);
+        }
+        if (periodicCheckHandler != null) {
+            periodicCheckHandler.removeCallbacks(periodicMediaSessionCheckRunnable);
+            periodicCheckHandler.postDelayed(periodicMediaSessionCheckRunnable, MEDIA_SESSION_CHECK_INTERVAL_MS);
+        }
     }
 
     @Override
     public void onListenerDisconnected() {
         super.onListenerDisconnected();
         Log.d(TAG, "Listener Disconnected");
+
+        if (periodicCheckHandler != null) {
+            periodicCheckHandler.removeCallbacks(periodicMediaSessionCheckRunnable);
+        }
     }
 
     private String getAppName(String packageName) {

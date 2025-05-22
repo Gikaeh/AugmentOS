@@ -43,6 +43,15 @@ export interface VideoStreamRequest extends BaseMessage {
 }
 
 /**
+ * Media control command from glasses
+ */
+export interface MediaControlCommand extends BaseMessage {
+  type: TpaToCloudMessageType.PHONE_MEDIA_CONTROL;
+  action: 'play' | 'pause' | 'next' | 'previous' | 'seek';
+  value?: number;
+}
+
+/**
  * Union type for all messages from TPAs to cloud
  */
 export type TpaToCloudMessage = 
@@ -53,7 +62,8 @@ export type TpaToCloudMessage =
   | VideoStreamRequest
   | DashboardContentUpdate
   | DashboardModeChange
-  | DashboardSystemUpdate;
+  | DashboardSystemUpdate
+  | MediaControlCommand;
 
 /**
  * Type guard to check if a message is a TPA connection init
@@ -109,4 +119,11 @@ export function isDashboardModeChange(message: TpaToCloudMessage): message is Da
  */
 export function isDashboardSystemUpdate(message: TpaToCloudMessage): message is DashboardSystemUpdate {
   return message.type === TpaToCloudMessageType.DASHBOARD_SYSTEM_UPDATE;
+}
+
+/**
+ * Type guard to check if a message is a media control command
+ */
+export function isMediaControlCommand(message: TpaToCloudMessage): message is MediaControlCommand {
+  return message.type === TpaToCloudMessageType.PHONE_MEDIA_CONTROL;
 }

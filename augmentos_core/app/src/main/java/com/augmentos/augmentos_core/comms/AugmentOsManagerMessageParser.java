@@ -2,6 +2,8 @@ package com.augmentos.augmentos_core.comms;
 
 import android.util.Log;
 
+import com.augmentos.augmentos_core.Constants;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -17,6 +19,7 @@ public class AugmentOsManagerMessageParser {
     public void parseMessage(String json) throws JSONException {
             JSONObject commandObject = new JSONObject(json);
             String command = commandObject.getString("command");
+            JSONObject data = commandObject.optJSONObject("data");
 
             switch (command) {
                 case "ping":
@@ -184,6 +187,24 @@ public class AugmentOsManagerMessageParser {
                 case "set_preferred_mic":
                     String mic = commandObject.getJSONObject("params").getString("mic");
                     callback.setPreferredMic(mic);
+                    break;
+
+                case Constants.MANAGER_TO_CORE_MEDIA_STATE:
+                    if (data != null && callback != null) {
+                        callback.sendMediaState(data);
+                    }
+                    break;
+
+                case Constants.MANAGER_TO_CORE_MEDIA_METADATA:
+                    if (data != null && callback != null) {
+                        callback.sendMediaMetadata(data);
+                    }
+                    break;
+
+                case Constants.MANAGER_TO_CORE_MEDIA_SESSION__ENDED:
+                    if (data != null && callback != null) {
+                        callback.sendMediaSessionEnded(data);
+                    }
                     break;
 
                 default:

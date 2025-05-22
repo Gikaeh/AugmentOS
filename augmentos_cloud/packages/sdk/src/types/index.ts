@@ -23,6 +23,9 @@ export * from './layouts';
 // Dashboard types
 export * from './dashboard';
 
+// Media types
+export * from './media';
+
 // Other system enums
 export * from './enums';
 
@@ -89,7 +92,10 @@ export {
   DataStream,
   CloudToTpaMessage,
   TranslationData,
-  ToolCall
+  ToolCall,
+  MediaStateUpdate,
+  MediaMetadataUpdate,
+  MediaSessionEndedUpdate,
 } from './messages/cloud-to-tpa';
 
 // From layout.ts

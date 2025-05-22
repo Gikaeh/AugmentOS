@@ -76,6 +76,8 @@ import com.augmentos.augmentos_core.tpa.EdgeTPASystem;
 import com.augmentos.augmentoslib.events.GlassesTapOutputEvent;
 import com.augmentos.augmentoslib.events.HomeScreenEvent;
 import com.augmentos.augmentoslib.events.SmartRingButtonOutputEvent;
+import com.augmentos.augmentoslib.events.CoreToManagerOutputEvent;
+import com.augmentos.augmentoslib.AugmentOSLibBus;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
@@ -1568,6 +1570,21 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
                     Log.e(TAG, "Error parsing settings update", e);
                 }
             }
+
+            @Override
+            public void onMediaControlCommand(JSONObject commandJson) {
+                Log.d(TAG, "AugmentosService: ServerCommsCallback.onMediaControlCommand received: " + commandJson);
+                try {
+                    JSONObject messageForManagerJs = new JSONObject();
+                    messageForManagerJs.put("source", Constants.CORE_TO_MANAGER_CLOUD_SENT_COMMAND);
+                    messageForManagerJs.put("command", commandJson);
+
+                    AugmentOSLibBus.getInstance().post(new CoreToManagerOutputEvent(messageForManagerJs.toString()));
+                    Log.d(TAG, "AugmentosService: Posted CoreToManagerOutputEvent for phone_media_control.");
+                } catch (JSONException e) {
+                    Log.e(TAG, "AugmentosService: Error wrapping/relaying phone_media_control command via ServerCommsCallback", e);
+                }
+            }
         });
     }
 
@@ -2246,5 +2263,23 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
         if (authHandler != null && authHandler.getCoreToken() != null) {
             ServerComms.getInstance().connectWebSocket(authHandler.getCoreToken());
         }
+    }
+
+    @Override
+    public void sendMediaState(JSONObject mediaStateData) {
+        Log.d(TAG, "AugmentosService: sendMediaState called");
+        ServerComms.getInstance().sendMediaState(mediaStateData);
+    }
+
+    @Override
+    public void sendMediaMetadata(JSONObject mediaMetadata) {
+        Log.d(TAG, "AugmentosService: sendMediaMetadata called");
+        ServerComms.getInstance().sendMediaMetadata(mediaMetadata);
+    }
+
+    @Override
+    public void sendMediaSessionEnded(JSONObject sessionEndedData) {
+        Log.d(TAG, "AugmentosService: sendMediaSessionEnded called");
+        ServerComms.getInstance().sendMediaSessionEnded(sessionEndedData);
     }
 }

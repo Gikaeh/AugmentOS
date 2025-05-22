@@ -4,6 +4,7 @@ import android.content.Context;
 import android.os.Environment;
 import android.util.Log;
 
+import com.augmentos.augmentos_core.Constants;
 import com.augmentos.augmentos_core.BuildConfig;
 import com.augmentos.augmentos_core.CalendarItem;
 import com.augmentos.augmentos_core.smarterglassesmanager.speechrecognition.AsrStreamKey;
@@ -430,6 +431,61 @@ public class ServerComms {
     }
 
     // ------------------------------------------------------------------------
+    // MEDIA EVENTS (if needed)
+    // ------------------------------------------------------------------------
+
+    public void sendMediaState(JSONObject mediaStateData) {
+        try {
+            JSONObject event = new JSONObject();
+            event.put("type", Constants.CORE_TO_CLOUD_STATE_UPDATE);
+            event.put("data", mediaStateData);
+            event.put("timestamp", System.currentTimeMillis());
+            if (wsManager != null && wsManager.isConnected()) {
+                wsManager.sendText(event.toString());
+                Log.d(TAG, "Sent media_state_update to cloud: " + event.toString().substring(0, Math.min(event.toString().length(), 100)));
+            } else {
+                Log.w(TAG, "Cannot send media_state_update, WebSocket not connected or wsManager is null.");
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "Error building media_state_update JSON");
+        }
+    }
+
+    public void sendMediaMetadata(JSONObject mediaMetadata) {
+        try {
+            JSONObject event = new JSONObject();
+            event.put("type", Constants.CORE_TO_CLOUD_METADATA_UPDATE);
+            event.put("data", mediaMetadata);
+            event.put("timestamp", System.currentTimeMillis());
+            if (wsManager != null && wsManager.isConnected()) {
+                wsManager.sendText(event.toString());
+                Log.d(TAG, "Sent media_metadata_update to cloud: " + event.toString().substring(0, Math.min(event.toString().length(), 100)));
+            } else {
+                Log.w(TAG, "Cannot send media_metadata_update, WebSocket not connected or wsManager is null.");
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "Error building media_metadata_update JSON for cloud", e);
+        }
+    }
+
+    public void sendMediaSessionEnded(JSONObject sessionEndedData) {
+        try {
+            JSONObject event = new JSONObject();
+            event.put("type", Constants.CORE_TO_CLOUD_SESSION_ENDED_UPDATE);
+            event.put("data", sessionEndedData);
+            event.put("timestamp", System.currentTimeMillis());
+            if (wsManager != null && wsManager.isConnected()) {
+                wsManager.sendText(event.toString());
+                Log.d(TAG, "Sent media_session_ended_update to cloud: " + event.toString().substring(0, Math.min(event.toString().length(), 100)));
+            } else {
+                Log.w(TAG, "Cannot send media_session_ended_update, WebSocket not connected or wsManager is null.");
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "Error building media_session_ended_update JSON for cloud", e);
+        }
+    }
+
+    // ------------------------------------------------------------------------
     // HARDWARE EVENTS (if needed)
     // ------------------------------------------------------------------------
 
@@ -737,6 +793,15 @@ public class ServerComms {
                 String stoppedPackage = msg.optString("packageName", "");
                 if (serverCommsCallback != null) {
                     serverCommsCallback.onAppStopped(stoppedPackage);
+                }
+                break;
+
+            case Constants.CLOUD_TO_CORE_TYPE_PHONE_MEDIA_CTRL:
+                Log.d(TAG, "Received phone_media_control command from cloud: " + msg.toString());
+                if (serverCommsCallback != null) {
+                    serverCommsCallback.onMediaControlCommand(msg);
+                } else {
+                    Log.w(TAG, "serverCommsCallback is null, cannot process phone_media_control command.");
                 }
                 break;
 

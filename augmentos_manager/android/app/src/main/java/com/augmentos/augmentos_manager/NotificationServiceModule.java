@@ -136,7 +136,7 @@ public class NotificationServiceModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void mediaControlPause(Promise promise) {
         try {
-            EventBus.getDefault().post(new MediaControlEvent(MediaControlEvent.ACTION_PAUSE));
+            EventBus.getDefault().post(new MediaControlEvent(ManagerMediaConstants.MEDIA_ACTION_PAUSE));
             Log.d(TAG, "Posted PAUSE MediaControlEvent to EventBus");
             promise.resolve("Pause command posted to EventBus.");
         } catch (Exception e) {
@@ -147,7 +147,7 @@ public class NotificationServiceModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void mediaControlNext(Promise promise) {
         try {
-            EventBus.getDefault().post(new MediaControlEvent(MediaControlEvent.MEDIA_ACTION_NEXT));
+            EventBus.getDefault().post(new MediaControlEvent(ManagerMediaConstants.MEDIA_ACTION_NEXT));
             Log.d(TAG, "Posted NEXT MediaControlEvent to EventBus");
             promise.resolve("Next command posted to EventBus.");
         } catch (Exception e) {

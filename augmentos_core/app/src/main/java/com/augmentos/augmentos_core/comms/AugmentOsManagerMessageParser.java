@@ -2,6 +2,8 @@ package com.augmentos.augmentos_core.comms;
 
 import android.util.Log;
 
+import com.augmentos.augmentos_core.Constants;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -148,19 +150,19 @@ public class AugmentOsManagerMessageParser {
                     callback.updateGlassesHeadUpAngle(headUpAngle);
                     break;
 
-                case "core_send_media_state":
+                case Constants.MANAGER_TO_CORE_MEDIA_STATE:
                     if (data != null && callback != null) {
                         callback.sendMediaState(data);
                     }
                     break;
 
-                case "core_send_media_metadata":
+                case Constants.MANAGER_TO_CORE_MEDIA_METADATA:
                     if (data != null && callback != null) {
                         callback.sendMediaMetadata(data);
                     }
                     break;
 
-                case "core_send_media_session_ended":
+                case Constants.MANAGER_TO_CORE_MEDIA_SESSION__ENDED:
                     if (data != null && callback != null) {
                         callback.sendMediaSessionEnded(data);
                     }

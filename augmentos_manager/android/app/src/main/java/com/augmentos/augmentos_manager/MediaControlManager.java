@@ -70,7 +70,7 @@ public class MediaControlManager {
                             playbackStateJson.put("status", getPlaybackStatusString(state.getState())); // Status of playback (e.g., Playing == 3, Pausing == 2)
                             playbackStateJson.put("speed", state.getPlaybackSpeed()); // Current speed of media (e.g., 1.0, 0.0 paused)
                             playbackStateJson.put("actions", state.getActions()); // Available actions bitmask
-                            playbackStateJson.put("position", currentPositionMs/1000);
+                            playbackStateJson.put("position", state.getPosition()/1000);
                             if (state.getState() == PlaybackStateCompat.STATE_ERROR) {
                                 CharSequence errorMessage = state.getErrorMessage();
                                 playbackStateJson.put("error", errorMessage != null ? errorMessage.toString() : "Unknown error");
@@ -284,7 +284,7 @@ public class MediaControlManager {
                     try {
                         JSONObject noSessionJson = new JSONObject();
                         noSessionJson.put("packageName", lastPackageName);
-                        eventListener.onMediaUpdate(, noSessionJson.toString());
+                        eventListener.onMediaUpdate(ManagerMediaConstants.MEDIA_EVENT_SESSION_ENDED, noSessionJson.toString());
                     } catch (Exception e) {
                         Log.e(TAG, "Error sending no active session event: " + e.getMessage(), e);
                     }
@@ -321,7 +321,7 @@ public class MediaControlManager {
                     transportControls.skipToNext();
                     break;
 
-                case anagerMediaConstants.MEDIA_ACTION_PREVIOUS:
+                case ManagerMediaConstants.MEDIA_ACTION_PREVIOUS:
                     transportControls.skipToPrevious();
                     break;
 

@@ -90,7 +90,10 @@ export {
   DataStream,
   CloudToTpaMessage,
   TranslationData,
-  ToolCall
+  ToolCall,
+  MediaStateUpdate,
+  MediaMetadataUpdate,
+  MediaSessionEndedUpdate,
 } from './messages/cloud-to-tpa';
 
 // From layout.ts

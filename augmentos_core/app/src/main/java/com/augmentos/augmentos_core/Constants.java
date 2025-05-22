@@ -30,4 +30,18 @@ public class Constants {
     public static final String SET_USER_SETTINGS_ENDPOINT = "/set_user_settings";
     public static final String GET_USER_SETTINGS_ENDPOINT = "/get_user_settings";
     public static final String REQUEST_APP_BY_PACKAGE_NAME_DOWNLOAD_LINK_ENDPOINT = "/request_app_by_package_name_download_link";
+
+    //media
+    // 'command' field for messages received by _core from _manager (JS)
+    public static final String MANAGER_TO_CORE_MEDIA_STATE = "core_send_media_state";
+    public static final String MANAGER_TO_CORE_MEDIA_METADATA = "core_send_media_metadata";
+    public static final String MANAGER_TO_CORE_MEDIA_SESSION__ENDED = "core_send_media_session_ended";
+    // 'source' field for messages _core sends to _manager (JS)
+    public static final String CORE_TO_MANAGER_CLOUD_SENT_COMMAND = "cloud_sent_media_command";
+    // 'type' field for messages _core receives from AugmentOS Cloud
+    public static final String CLOUD_TO_CORE_TYPE_PHONE_MEDIA_CTRL = "phone_media_control";
+    // 'type' field for messages _core sends to _cloud
+    public static final String CORE_TO_CLOUD_STATE_UPDATE = "media_state_update";
+    public static final String CORE_TO_CLOUD_METADATA_UPDATE = "media_metadata_update";
+    public static final String CORE_TO_CLOUD_SESSION_ENDED_UPDATE = "media_session_ended_update";
 }

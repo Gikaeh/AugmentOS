@@ -77,7 +77,7 @@ export enum TpaToCloudMessageType {
   DASHBOARD_MODE_CHANGE = 'dashboard_mode_change',
   DASHBOARD_SYSTEM_UPDATE = 'dashboard_system_update',
 
-  MEDIA_CONTROL_COMMAND = 'media_control_command'
+  PHONE_MEDIA_CONTROL = 'phone_media_control'
 }
 
 /**

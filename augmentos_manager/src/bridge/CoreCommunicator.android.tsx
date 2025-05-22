@@ -10,7 +10,6 @@ import {
 import {check, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import BleManager from 'react-native-ble-manager';
 import BackendServerComms from '../backend_comms/BackendServerComms';
-// Ensure same structure from sdk
 import {
   CloudToTpaMessageType,
   MediaState,
@@ -19,8 +18,11 @@ import {
   MediaStateUpdate,
   MediaMetadataUpdate,
   MediaSessionEndedUpdate,
-} from '../../../augmentos_cloud/packages/sdk/src/types'; 
-import {CloudToCoreMessageTypes, MediaActionCommands, NativeToJsMessageSources, PhoneMediaEventNames} from '../types/message-types';
+  CloudToCoreMessageTypes, 
+  MediaActionCommands, 
+  NativeToJsMessageSources, 
+  PhoneMediaEventNames
+} from '../types/message-types';
 import {CloudSentMediaCommand, NativeMediaEventData} from '../utils/MediaUtils';
 
 // For checking if location services are enabled

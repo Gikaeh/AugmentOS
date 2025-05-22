@@ -29,7 +29,7 @@ export interface TpaSubscriptionUpdate extends BaseMessage {
  * Media control command from glasses
  */
 export interface MediaControlCommand extends BaseMessage {
-  type: TpaToCloudMessageType.MEDIA_CONTROL_COMMAND;
+  type: TpaToCloudMessageType.PHONE_MEDIA_CONTROL;
   action: 'play' | 'pause' | 'next' | 'previous' | 'seek';
   value?: number;
 }
@@ -92,5 +92,5 @@ export function isDashboardSystemUpdate(message: TpaToCloudMessage): message is 
  * Type guard to check if a message is a media control command
  */
 export function isMediaControlCommand(message: TpaToCloudMessage): message is MediaControlCommand {
-  return message.type === TpaToCloudMessageType.MEDIA_CONTROL_COMMAND;
+  return message.type === TpaToCloudMessageType.PHONE_MEDIA_CONTROL;
 }

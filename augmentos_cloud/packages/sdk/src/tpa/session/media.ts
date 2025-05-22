@@ -47,7 +47,7 @@ export class MediaControls {
 
     play(): void {
         this.sendCommandToCloud({
-            type: TpaToCloudMessageType.MEDIA_CONTROL_COMMAND,
+            type: TpaToCloudMessageType.PHONE_MEDIA_CONTROL,
             action: 'play',
             timestamp: new Date()
         });
@@ -55,7 +55,7 @@ export class MediaControls {
 
     pause(): void {
         this.sendCommandToCloud({
-            type: TpaToCloudMessageType.MEDIA_CONTROL_COMMAND,
+            type: TpaToCloudMessageType.PHONE_MEDIA_CONTROL,
             action: 'pause',
             timestamp: new Date()
         });
@@ -63,7 +63,7 @@ export class MediaControls {
 
     skipToNext(): void {
         this.sendCommandToCloud({
-            type: TpaToCloudMessageType.MEDIA_CONTROL_COMMAND,
+            type: TpaToCloudMessageType.PHONE_MEDIA_CONTROL,
             action: 'next',
             timestamp: new Date()
         });
@@ -71,7 +71,7 @@ export class MediaControls {
 
     skipToPrevious(): void {
         this.sendCommandToCloud({
-            type: TpaToCloudMessageType.MEDIA_CONTROL_COMMAND,
+            type: TpaToCloudMessageType.PHONE_MEDIA_CONTROL,
             action: 'previous',
             timestamp: new Date()
         });
@@ -79,7 +79,7 @@ export class MediaControls {
 
     seekTo(positionSeconds: number): void {
         this.sendCommandToCloud({
-            type: TpaToCloudMessageType.MEDIA_CONTROL_COMMAND,
+            type: TpaToCloudMessageType.PHONE_MEDIA_CONTROL,
             action: "seek",
             value: positionSeconds,
             timestamp: new Date()

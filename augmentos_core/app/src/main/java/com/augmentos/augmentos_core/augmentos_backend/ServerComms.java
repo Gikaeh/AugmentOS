@@ -4,6 +4,7 @@ import android.content.Context;
 import android.os.Environment;
 import android.util.Log;
 
+import com.augmentos.augmentos_core.Constants;
 import com.augmentos.augmentos_core.BuildConfig;
 import com.augmentos.augmentos_core.CalendarItem;
 import com.augmentos.augmentos_core.smarterglassesmanager.speechrecognition.AsrStreamKey;
@@ -428,7 +429,7 @@ public class ServerComms {
     public void sendMediaState(JSONObject mediaStateData) {
         try {
             JSONObject event = new JSONObject();
-            event.put("type", "media_state_update");
+            event.put("type", Constants.CORE_TO_CLOUD_STATE_UPDATE);
             event.put("data", mediaStateData);
             event.put("timestamp", System.currentTimeMillis());
             if (wsManager != null && wsManager.isConnected()) {
@@ -445,7 +446,7 @@ public class ServerComms {
     public void sendMediaMetadata(JSONObject mediaMetadata) {
         try {
             JSONObject event = new JSONObject();
-            event.put("type", "media_metadata_update");
+            event.put("type", Constants.CORE_TO_CLOUD_METADATA_UPDATE);
             event.put("data", mediaMetadata);
             event.put("timestamp", System.currentTimeMillis());
             if (wsManager != null && wsManager.isConnected()) {
@@ -462,7 +463,7 @@ public class ServerComms {
     public void sendMediaSessionEnded(JSONObject sessionEndedData) {
         try {
             JSONObject event = new JSONObject();
-            event.put("type", "media_session_ended_update");
+            event.put("type", Constants.CORE_TO_CLOUD_SESSION_ENDED_UPDATE);
             event.put("data", sessionEndedData);
             event.put("timestamp", System.currentTimeMillis());
             if (wsManager != null && wsManager.isConnected()) {
@@ -682,7 +683,7 @@ public class ServerComms {
                 Log.d(TAG, "Server is requesting a reconnect.");
                 break;
 
-            case "phone_media_control":
+            case Constants.CLOUD_TO_CORE_TYPE_PHONE_MEDIA_CTRL:
                 Log.d(TAG, "Received phone_media_control command from cloud: " + msg.toString());
                 if (serverCommsCallback != null) {
                     serverCommsCallback.onMediaControlCommand(msg);

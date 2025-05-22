@@ -1275,7 +1275,7 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
                 Log.d(TAG, "AugmentosService: ServerCommsCallback.onMediaControlCommand received: " + commandJson);
                 try {
                     JSONObject messageForManagerJs = new JSONObject();
-                    messageForManagerJs.put("source", "media_command");
+                    messageForManagerJs.put("source", Constants.CORE_TO_MANAGER_CLOUD_SENT_COMMAND);
                     messageForManagerJs.put("command", commandJson);
 
                     AugmentOSLibBus.getInstance().post(new CoreToManagerOutputEvent(messageForManagerJs.toString()));

@@ -49,6 +49,70 @@ export const MediaActionCommands = {
     SEEK: 'seek',
 }
 
+export interface BaseMessage {
+  /** Type of the message */
+  type: string;
+
+  /** When the message was created */
+  timestamp?: Date;
+
+  /** Session identifier for routing */
+  sessionId?: string;
+}
+
+export enum CloudToTpaMessageType {
+    MEDIA_STATE_UPDATE = 'media_state_update', 
+    MEDIA_METADATA_UPDATE = 'media_metadata_update', 
+    MEDIA_SESSION_ENDED_UPDATE = 'media_session_ended_update', 
+}
+
+export enum MediaStatusType {
+    NONE = 'none',
+    STOPPED = 'stopped',
+    PAUSED = 'paused',
+    PLAYING = 'playing',
+    SKIPPING_TO_NEXT = 'skipping_to_next',
+    SKIPPING_TO_PREVIOUS = 'skipping_to_previous',
+    FAST_FORWARDING = 'fast_forwarding',
+    REWINDING = 'rewinding',
+    UNKNOWN = 'unknown'
+}
+
+export interface MediaState {
+    status: MediaStatusType;
+    position?: number;
+    speed?: number;
+    actions?: number;
+    error?: string;
+}
+
+export interface MediaMetadata {
+    packageName?: string;
+    title?: string;
+    artist?: string;
+    album?: string;
+    duration?: number;
+}
+
+export interface MediaSessionEnded {
+    packageName?: string;
+}
+
+
+export interface MediaStateUpdate extends BaseMessage {
+  type: CloudToTpaMessageType.MEDIA_STATE_UPDATE; // Uses the locally defined enum
+  data: MediaState;
+}
+
+export interface MediaMetadataUpdate extends BaseMessage {
+  type: CloudToTpaMessageType.MEDIA_METADATA_UPDATE; // Uses the locally defined enum
+  data: MediaMetadata;
+}
+
+export interface MediaSessionEndedUpdate extends BaseMessage {
+  type: CloudToTpaMessageType.MEDIA_SESSION_ENDED_UPDATE; // Uses the locally defined enum
+  data: MediaSessionEnded;
+}
 export type ValueOf<T> = T[keyof T];
 
 export type ManagerToCoreCommandValue = ValueOf<typeof ManagerToCoreCommands>;

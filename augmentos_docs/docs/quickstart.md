@@ -2,11 +2,7 @@
 sidebar_position: 2
 ---
 
-# ✅ Quickstart
-
-*Last updated: March 31, 2025*
-
-**This is the recommended way to build an AugmentOS smart glasses app as of March 31 2025. The SDK is currently in beta.** 
+# Quickstart
 
 AugmentOS is how you write powerful smart glasses apps. In this Quickstart, let's go from 0 to fully functioning app (that works on [these smart glasses](https://augmentos.org/glasses/)) in less than 15 minutes.
 
@@ -50,11 +46,11 @@ Download AugmentOS from [AugmentOS.org/install](https://AugmentOS.org/install)
 ### Get your app running
 
 1. [Install bun](https://bun.sh/docs/installation)
-2. Clone the example repo: 
+2. Clone the example repo:
    ```bash
    git clone git@github.com:AugmentOS-Community/AugmentOS-Cloud-Example-App.git
    ```
-   
+
    **Note:** If you want a more in-depth example (recommended for those who've already completed this quickstart), you can use the [Live-Captions repository](https://github.com/AugmentOS-Community/LiveCaptionsOnSmartGlasses) which includes app settings support.
 3. Navigate to the repo directory and install dependencies:
    ```bash
@@ -85,6 +81,6 @@ For more information, visit the [AugmentOS-Cloud-Example-App repository](https:/
 
 ## Next Steps
 
-- Explore the [🚧 Build From Scratch](getting-started) guide for a more detailed walkthrough
-- Learn about [🚧 Core Concepts](core-concepts) to understand how AugmentOS apps work
+- Explore the [Build From Scratch](getting-started) guide for a more detailed walkthrough
+- Learn about [Core Concepts](core-concepts) to understand how AugmentOS apps work
 - Join our [Discord community](https://discord.gg/5ukNvkEAqT) for help and support

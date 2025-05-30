@@ -2,13 +2,7 @@
 sidebar_position: 3
 ---
 
-# 🚧 Build From Scratch
-
-*Last updated: March 31, 2025*
-
-## 🚧 WIP 🚧
-These Docs are still under construction 👷🚧, and the code is evolving fast. 
-If you have any issues or get stuck, feel free to reach out at team@mentra.glass.
+# Build From Scratch
 
 This guide will walk you through creating a simple "Hello, World" AugmentOS app that displays text on the AugmentOS smart glasses. This will introduce you to the basic structure of an app and how to use the SDK.
 
@@ -61,11 +55,10 @@ Add the following code to `index.ts`:
 ```typescript
 import { TpaServer, TpaSession } from '@augmentos/sdk';
 
-// Replace with your app's details.  These should match what's
-// registered in the (future) AugmentOS app store.
-const PACKAGE_NAME = "com.example.myfirstaugmentosapp"; // CHANGE THIS!
+// Replace with your app's details:
+const PACKAGE_NAME = "com.example.myfirstaugmentosapp"; // Change this to match your package name in the developer console.
 const PORT = 3000;  // Choose a port for your app's server.
-const API_KEY = 'your_api_key'; // Replace with your API key.
+const API_KEY = 'your_api_key'; // Replace with your API key.  Ideally load this from a .env file using process.env.AUGMENTOS_API_KEY
 
 class MyAugmentOSApp extends TpaServer {
     protected async onSession(session: TpaSession, sessionId: string, userId: string): Promise<void> {
@@ -73,7 +66,7 @@ class MyAugmentOSApp extends TpaServer {
 
         // Display "Hello, World!" on the glasses.
         session.layouts.showTextWall("Hello, World!");
-        
+
         // Log when the session is disconnected.
         session.events.onDisconnected(() => {
             console.log(`Session ${sessionId} disconnected.`);
@@ -224,11 +217,11 @@ ngrok http --url=<YOUR_NGROK_URL_HERE> 3000
 
 > **IMPORTANT:** After making changes to your app code or restarting your server, you must restart your app inside the AugmentOS phone app.
 
-## Part 4: Setting Up TPA AI Tools for Mira
+## Part 4: Setting Up App AI Tools for Mira
 
-Mira, the AugmentOS AI assistant, can call functions in your TPA. This allows your application to extend Mira's capabilities with custom tools.
+Mira, the AugmentOS AI assistant, can call functions in your app. This allows your application to extend Mira's capabilities with custom tools.
 
-For a comprehensive guide on TPA AI tools, see [AI Tools](/tools).
+For a comprehensive guide on app AI tools, see [AI Tools](/tools).
 
 ## What's Next?
 

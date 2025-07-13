@@ -1,7 +1,7 @@
 // src/services/api.service.ts
 import axios from "axios";
-import { Permission, TPA } from "@/types/tpa";
-import { AppI } from "@augmentos/sdk";
+import { Permission, App } from "@/types/app";
+import { AppI } from "@mentra/sdk";
 
 // Set default config
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || "http://localhost:8002";
@@ -40,9 +40,9 @@ async function retryWithBackoff<T>(
   throw new Error('Max retries reached');
 }
 
-// Extended TPA interface for API responses
+// Extended App interface for API responses
 export interface AppResponse extends AppI {
-  id: string; // Add id property to match TPA interface
+  id: string; // Add id property to match App interface
   createdAt: string;
   updatedAt: string;
   publicUrl: string;
@@ -51,6 +51,7 @@ export interface AppResponse extends AppI {
   reviewedBy?: string;
   reviewedAt?: string;
   sharedWithEmails?: string[];
+  onboardingInstructions?: string;
 }
 
 // API key response
@@ -267,9 +268,9 @@ const api = {
     },
   },
 
-  // TPA management endpoints
+  // App management endpoints
   apps: {
-    // Get all TPAs for the current organization
+    // Get all Apps for the current organization
     getAll: async (orgId?: string): Promise<AppResponse[]> => {
       return retryWithBackoff(async () => {
         const config = orgId ? { headers: { 'x-org-id': orgId } } : undefined;
@@ -278,29 +279,29 @@ const api = {
       });
     },
 
-    // Get a specific TPA by package name
+    // Get a specific App by package name
     getByPackageName: async (packageName: string, orgId?: string): Promise<AppResponse> => {
       const config = orgId ? { headers: { 'x-org-id': orgId } } : undefined;
       const response = await axios.get(`/api/dev/apps/${packageName}`, config);
       return response.data;
     },
 
-    // Create a new TPA
-    create: async (orgId: string, tpaData: AppI): Promise<{ app: AppResponse; apiKey: string }> => {
-      const response = await axios.post("/api/dev/apps/register", tpaData, {
+    // Create a new App
+    create: async (orgId: string, appData: AppI): Promise<{ app: AppResponse; apiKey: string }> => {
+      const response = await axios.post("/api/dev/apps/register", appData, {
         headers: { 'x-org-id': orgId }
       });
       return response.data;
     },
 
-    // Update an existing TPA
-    update: async (packageName: string, tpaData: Partial<TPA>, orgId?: string): Promise<AppResponse> => {
+    // Update an existing App
+    update: async (packageName: string, appData: Partial<App>, orgId?: string): Promise<AppResponse> => {
       const config = orgId ? { headers: { 'x-org-id': orgId } } : undefined;
-      const response = await axios.put(`/api/dev/apps/${packageName}`, tpaData, config);
+      const response = await axios.put(`/api/dev/apps/${packageName}`, appData, config);
       return response.data;
     },
 
-    // Delete a TPA
+    // Delete a App
     delete: async (packageName: string, orgId?: string): Promise<void> => {
       const config = orgId ? { headers: { 'x-org-id': orgId } } : undefined;
       await axios.delete(`/api/dev/apps/${packageName}`, config);
@@ -313,7 +314,7 @@ const api = {
       return response.data;
     },
 
-    // Move a TPA to a different organization
+    // Move a App to a different organization
     moveToOrg: async (packageName: string, targetOrgId: string, sourceOrgId: string): Promise<AppResponse> => {
       const response = await axios.post(
         `/api/dev/apps/${packageName}/move-org`,
@@ -325,7 +326,7 @@ const api = {
 
     // API key management
     apiKey: {
-      // Generate a new API key for a TPA
+      // Generate a new API key for a App
       regenerate: async (packageName: string, orgId?: string): Promise<ApiKeyResponse> => {
         const config = orgId ? { headers: { 'x-org-id': orgId } } : undefined;
         const response = await axios.post(`/api/dev/apps/${packageName}/api-key`, {}, config);
@@ -335,13 +336,13 @@ const api = {
 
     // Permissions management
     permissions: {
-      // Get permissions for a TPA
+      // Get permissions for a App
       get: async (packageName: string): Promise<{permissions: Permission[]}> => {
         const response = await axios.get(`/api/permissions/${packageName}`);
         return response.data;
       },
 
-      // Update permissions for a TPA
+      // Update permissions for a App
       update: async (packageName: string, permissions: Permission[]): Promise<{permissions: Permission[]}> => {
         const response = await axios.patch(`/api/permissions/${packageName}`, { permissions });
         return response.data;
@@ -361,16 +362,70 @@ const api = {
     },
   },
 
+  // Image upload endpoints for Cloudflare Images
+  images: {
+    /**
+     * Upload an image to Cloudflare Images
+     * @param file - The image file to upload
+     * @param metadata - Optional metadata for the image
+     * @returns The Cloudflare image URL
+     */
+    upload: async (file: File, metadata?: { appPackageName?: string }): Promise<{ url: string; imageId: string }> => {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      if (metadata?.appPackageName) {
+        formData.append('metadata', JSON.stringify({ appPackageName: metadata.appPackageName }));
+      }
+
+      const response = await axios.post('/api/dev/images/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      return response.data;
+    },
+
+    /**
+     * Replace an existing image
+     * @param imageId - The ID of the image to replace
+     * @param file - The new image file
+     * @returns The new Cloudflare image URL
+     */
+    replace: async (imageId: string, file: File): Promise<{ url: string; imageId: string }> => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('replaceImageId', imageId);
+
+      const response = await axios.post('/api/dev/images/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      return response.data;
+    },
+
+    /**
+     * Delete an image from Cloudflare Images
+     * @param imageId - The ID of the image to delete
+     */
+    delete: async (imageId: string): Promise<void> => {
+      await axios.delete(`/api/dev/images/${imageId}`);
+    },
+  },
+
   // Installation sharing endpoints
   sharing: {
-    // Get a shareable installation link for a TPA
+    // Get a shareable installation link for a App
     getInstallLink: async (packageName: string, orgId?: string): Promise<string> => {
       const config = orgId ? { headers: { 'x-org-id': orgId } } : undefined;
       const response = await axios.get(`/api/dev/apps/${packageName}/share`, config);
       return response.data.installUrl;
     },
 
-    // Track that a TPA has been shared with a specific email
+    // Track that a App has been shared with a specific email
     trackSharing: async (packageName: string, emails: string[], orgId?: string): Promise<void> => {
       const config = orgId ? { headers: { 'x-org-id': orgId } } : undefined;
       await axios.post(`/api/dev/apps/${packageName}/share`, { emails }, config);

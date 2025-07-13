@@ -1,7 +1,7 @@
 "on":
     push:
         branches:
-            - isaiah/logging
+            - tiers
 name: 🚀 [debug] Porter.run Deploy
 jobs:
     porter-deploy:

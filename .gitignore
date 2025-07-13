@@ -1,5 +1,7 @@
+local/*
 K900_server_sdk/*
 AugmentOS-Cloud-Example-App/*
+RtmpStreamExampleBasic/*
 server/config.json
 K900_server_sdk/*
 K900Server_open/*
@@ -295,6 +297,9 @@ cython_debug/
 
 # pyenv
 .python-version
+
+# Ensure authCore.ts is not ignored despite lib/ pattern
+!**/react-sdk/src/lib/
 
 # macos garbage
 .DS_Store

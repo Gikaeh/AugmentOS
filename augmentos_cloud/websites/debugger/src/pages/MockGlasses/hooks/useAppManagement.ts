@@ -1,10 +1,10 @@
-import { GlassesToCloudMessage, AppI } from '@augmentos/sdk';
+import { GlassesToCloudMessage, AppI } from '@mentra/sdk';
 import { useState, useEffect, useCallback } from 'react';
 
 interface ActiveApp {
   packageName: string;
   name: string;
-  tpaSessionId?: string;
+  appSessionId?: string;
   status: 'starting' | 'active' | 'error';
 }
 
@@ -57,7 +57,7 @@ export const useAppManagement = (
         setActiveApps(prev =>
           prev.map(app =>
             app.packageName === packageName
-              ? { ...app, status: 'active', tpaSessionId: result.tpaSessionId }
+              ? { ...app, status: 'active', appSessionId: result.appSessionId }
               : app
           )
         );

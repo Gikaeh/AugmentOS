@@ -3,7 +3,7 @@
 This is the Android code that runs on Android-based smart glasses (ex: Mentra Live).
 
 ## Documentation
-- [ASG_MEDIA_SYSTEM.md](./ASG_MEDIA_SYSTEM.md) - Detailed documentation about the camera button press system, photo/video capture workflow, and how TPAs (Third Party Applications) can interact with the media system.
+- [ASG_MEDIA_SYSTEM.md](./ASG_MEDIA_SYSTEM.md) - Detailed documentation about the camera button press system, photo/video capture workflow, and how Apps (Third Party Applications) can interact with the media system.
 
 ## Compatible Devices
 
@@ -26,7 +26,7 @@ We'd appreciate testers for these untested devices - let us know if you get it w
 
 2. By default, the example contains production settings:
    ```
-   AUGMENTOS_HOST=cloud.augmentos.org
+   AUGMENTOS_HOST=cloud.mentra.glass
    AUGMENTOS_PORT=443
    AUGMENTOS_SECURE=true
    ```

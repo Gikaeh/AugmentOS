@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { Request, Response } from 'express';
 import { validateCoreToken } from '../middleware/supabaseMiddleware';
 import { tokenService } from '../services/core/temp-token.service';
-import { validateTpaApiKey } from '../middleware/validateApiKey';
+import { validateAppApiKey } from '../middleware/validateApiKey';
 import { logger as rootLogger } from '../services/logging/pino-logger';
 const logger = rootLogger.child({ service: 'auth.routes' });
 import appService from '../services/core/app.service';
@@ -68,8 +68,8 @@ router.post('/generate-webview-token', validateCoreToken, async (req: Request, r
   }
 });
 
-// Exchange a temporary token for user details (called by TPA backend)
-router.post('/exchange-user-token', validateTpaApiKey, async (req: Request, res: Response) => {
+// Exchange a temporary token for user details (called by App backend)
+router.post('/exchange-user-token', validateAppApiKey, async (req: Request, res: Response) => {
   const { aos_temp_token, packageName } = req.body;
 
   if (!aos_temp_token) {
@@ -158,6 +158,43 @@ router.post('/hash-with-api-key', validateCoreToken, async (req: Request, res: R
   } catch (error) {
     logger.error({ error, packageName }, 'Failed to hash string with API key');
     res.status(500).json({ success: false, error: 'Failed to generate hash' });
+  }
+});
+
+/**
+ * Generate a signed JWT token for webview authentication in Apps.
+ * This token is designed to be verified client-side in Apps using the public key.
+ * The token contains a frontend token that can be verified using the App's API key.
+ *
+ * @route POST /api/auth/generate-webview-signed-user-token
+ * @middleware validateCoreToken - Validates the AugmentOS core token
+ * @body {string} packageName - The package name of the App requesting the token
+ * @returns {Object} Response containing the signed JWT token and expiration info
+ * @throws {400} If packageName is missing
+ * @throws {500} If token generation fails
+ */
+router.post('/generate-webview-signed-user-token', validateCoreToken, async (req: Request, res: Response) => {
+  const userId: string = (req as any).email; // Use the email property set by validateCoreToken
+  const { packageName }: { packageName?: string } = req.body;
+
+  if (!packageName) {
+    return res.status(400).json({ success: false, error: 'packageName is required' });
+  }
+
+  try {
+    // Use the issueUserToken from tokenService with the package name
+    // This generates a token with a frontend token specific to the requesting App
+    const signedToken: string = await tokenService.issueUserToken(userId, packageName);
+    console.log('[auth.service] Signed user token generated:', signedToken);
+
+    res.json({
+      success: true,
+      token: signedToken,
+      expiresIn: '10m'  // Matching the expiration time set in the token
+    });
+  } catch (error) {
+    logger.error({ error, userId, packageName }, '[auth.service] Failed to generate signed webview user token');
+    res.status(500).json({ success: false, error: 'Failed to generate token: ' + error });
   }
 });
 

@@ -2,8 +2,6 @@
 import { Router, Request, Response } from 'express';
 import { validateAdminEmail } from '../middleware/admin-auth.middleware';
 import App, { AppI } from '../models/app.model';
-// import { logger } from '@augmentos/utils';
-import { Exception } from '@sentry/node';
 import { logger as rootLogger } from '../services/logging/pino-logger';
 import { Organization } from '../models/organization.model';
 import { LeanDocument, Types } from 'mongoose';
@@ -219,7 +217,7 @@ router.post('/create-test-submission', async (req, res) => {
       description: 'This is a test app submission for development',
       appStoreStatus: 'SUBMITTED',
       isPublic: true,
-      tpaType: 'TPAWebView',
+      appType: 'AppWebView',
       hashedApiKey: 'test-key-hash',
       logoURL: 'https://placehold.co/100x100?text=Test'
     });

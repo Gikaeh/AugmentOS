@@ -20,8 +20,6 @@ import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
-import com.augmentos.augmentos_core.microphone.MicrophoneService;
-
 import androidx.core.app.ActivityCompat;
 
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.AudioChunkNewEvent;
@@ -190,57 +188,12 @@ public class MicrophoneLocalAndBluetooth {
         // Always use the main thread's Looper to prevent threading issues
         mHandler = new Handler(Looper.getMainLooper());
 
-        // Start the dedicated microphone service
-        startMicrophoneService(context);
-
         // Initialize the countdown timer
         initCountDownTimer();
 
         startRecording();
     }
     
-    /**
-     * Starts the dedicated microphone foreground service
-     */
-    private void startMicrophoneService(Context context) {
-        Intent intent = new Intent(context, MicrophoneService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
-        }
-        Log.d(TAG, "Started MicrophoneService for microphone permissions");
-    }
-
-    /**
-     * Stops the dedicated microphone foreground service
-     */
-    private void stopMicrophoneService(Context context) {
-        if (context == null) return;
-        
-        // On Android 14 (SDK 34+), we need to ensure the service has enough time to call
-        // startForeground() before stopping it, otherwise we'll get a ForegroundServiceDidNotStartInTimeException
-        
-        try {
-            // Instead of immediately stopping, wait briefly to ensure startForeground() has been called
-            Handler handler = new Handler(Looper.getMainLooper());
-            handler.postDelayed(() -> {
-                try {
-                    if (context != null) {
-                        Intent intent = new Intent(context, MicrophoneService.class);
-                        context.stopService(intent);
-                        Log.d(TAG, "Stopped MicrophoneService after delay");
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Error stopping MicrophoneService", e);
-                }
-            }, 500); // 500ms delay to allow startForeground() to complete
-            
-            Log.d(TAG, "Scheduled MicrophoneService stop with delay");
-        } catch (Exception e) {
-            Log.e(TAG, "Error in delayed MicrophoneService stop", e);
-        }
-    }
 
     private void initCountDownTimer() {
         if (mCountDown != null) {
@@ -342,7 +295,13 @@ public class MicrophoneLocalAndBluetooth {
             audioManager.setMode(AudioManager.MODE_IN_CALL);
             EventBus.getDefault().post(new ScoStartEvent(true));
         } else {
-            audioManager.setMode(AudioManager.MODE_NORMAL);
+            // Samsung devices work better with MODE_IN_COMMUNICATION for non-SCO recording
+            if ("samsung".equalsIgnoreCase(android.os.Build.MANUFACTURER)) {
+                audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+                Log.d(TAG, "Samsung device - using MODE_IN_COMMUNICATION for better audio routing");
+            } else {
+                audioManager.setMode(AudioManager.MODE_NORMAL);
+            }
             EventBus.getDefault().post(new ScoStartEvent(false));
         }
 
@@ -353,14 +312,38 @@ public class MicrophoneLocalAndBluetooth {
         }
 
         try {
-            recorder = new AudioRecord(MediaRecorder.AudioSource.CAMCORDER,
+            // Choose audio source based on device manufacturer
+            // Samsung devices work better with VOICE_RECOGNITION source
+            int audioSource = MediaRecorder.AudioSource.CAMCORDER;
+            if ("samsung".equalsIgnoreCase(android.os.Build.MANUFACTURER)) {
+                // VOICE_RECOGNITION is more cooperative on Samsung devices
+                audioSource = MediaRecorder.AudioSource.VOICE_RECOGNITION;
+                Log.d(TAG, "Samsung device detected - using VOICE_RECOGNITION audio source for better app cooperation");
+            }
+            
+            recorder = new AudioRecord(audioSource,
                     SAMPLING_RATE_IN_HZ, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize * 2);
+            
+            Log.d(TAG, "AudioRecord created with source: " + audioSource + 
+                  " (CAMCORDER=" + MediaRecorder.AudioSource.CAMCORDER + 
+                  ", VOICE_RECOGNITION=" + MediaRecorder.AudioSource.VOICE_RECOGNITION + ")");
 
             if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
                 Log.e(TAG, "Failed to initialize AudioRecord");
                 Toast.makeText(this.mContext, "Error starting onboard microphone", Toast.LENGTH_LONG).show();
                 stopRecording();
                 return;
+            }
+            
+            // On Samsung devices, set the audio session ID to help with detection
+            if ("samsung".equalsIgnoreCase(android.os.Build.MANUFACTURER)) {
+                try {
+                    // This might help with Samsung's audio routing
+                    recorder.setPreferredDevice(null); // Clear any preferred device
+                    Log.d(TAG, "Samsung: Cleared preferred audio device for better sharing");
+                } catch (Exception e) {
+                    Log.e(TAG, "Error setting Samsung audio preferences", e);
+                }
             }
             
             // Register our AudioRecord with the PhoneMicrophoneManager for conflict detection
@@ -716,9 +699,6 @@ public class MicrophoneLocalAndBluetooth {
 
         // Set the destroyed flag first to prevent any new operations
         isDestroyed.set(true);
-
-        // Stop the dedicated microphone service
-        stopMicrophoneService(mContext);
 
         // Cancel the countdown timer
         if (mCountDown != null) {

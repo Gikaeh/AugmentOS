@@ -1,12 +1,12 @@
 // src/enums.ts
 
 /**
- * Types of Third-Party Applications (TPAs)
+ * Types of Third-Party Applications (Apps)
  */
-export enum TpaType {
+export enum AppType {
     SYSTEM_DASHBOARD = 'system_dashboard',  // Special UI placement, system functionality
     BACKGROUND = 'background',              // Can temporarily take control of display
-    STANDARD = 'standard'                   // Regular TPA (default) only one standard app can run at a time. starting a standard TPA will close any other standard TPA that is running.
+    STANDARD = 'standard'                   // Regular App (default) only one standard app can run at a time. starting a standard App will close any other standard App that is running.
 }
 
 // TODO(isaiah): doesn't seem like this is actually used anywhere, remove?
@@ -62,7 +62,9 @@ export enum AppSettingType {
     TEXT_NO_SAVE_BUTTON = 'text_no_save_button',
     SELECT_WITH_SEARCH = 'select_with_search',
     MULTISELECT = 'multiselect',
-    TITLE_VALUE = 'titleValue'
+    TITLE_VALUE = 'titleValue',
+    NUMERIC_INPUT = 'numeric_input',
+    TIME_PICKER = 'time_picker'
 }
 // | { type: "toggle"; key: string; label: string; defaultValue: boolean }
 // | { type: "text"; key: string; label: string; defaultValue?: string }

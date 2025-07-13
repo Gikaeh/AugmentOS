@@ -6,11 +6,31 @@ import { User } from '../models/user.model';
 import { Types } from 'mongoose';
 import { OrganizationService } from '../services/core/organization.service';
 import App from '../models/app.model';
-import sessionService from '../services/core/session.service';
+import sessionService from '../services/session/session.service';
 import { logger as rootLogger } from '../services/logging/pino-logger';
+import multer from 'multer';
+import FormData from 'form-data';
+import axios from 'axios';
 
 const logger = rootLogger.child({ service: 'developer.routes' });
 // TODO(isaiah): refactor this code to use this logger instead of console.log, console.error, etc.
+
+// Configure multer for memory storage (files stored in memory as Buffer)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PNG, JPEG, GIF, and WebP images are allowed.'));
+    }
+  }
+});
 
 // Define request with user and organization info
 interface DevPortalRequest extends Request {
@@ -26,24 +46,36 @@ const router = Router();
  * Middleware to validate Core token - similar to how apps.routes.ts works
  */
 import jwt from 'jsonwebtoken';
+import UserSession from '../services/session/UserSession';
 const AUGMENTOS_AUTH_JWT_SECRET = process.env.AUGMENTOS_AUTH_JWT_SECRET || "";
 
 // TODO(isaiah): This is called validateSupabaseToken, but i'm pretty sure this is using an AugmentOS JWT(coreToken), not a Supabase token.
 // TODO(isaiah): Investigate how currentOrgId is used, the DevPortalRequest claims it's optional yet this middleware fails if it's not provided.
-// Also the middleware doesn't validate the currentOrgId, only injects it into the request object, maybe it should just be a query param instead of a header?  
+// Also the middleware doesn't validate the currentOrgId, only injects it into the request object, maybe it should just be a query param instead of a header?
 const validateSupabaseToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  // Extract token from Authorization header
   const authHeader = req.headers.authorization;
-  console.log('Auth header:', authHeader ? `${authHeader.substring(0, 20)}...` : 'none');
+  const baseLogger = logger.child({
+    service: 'developer.routes',
+    function: 'validateSupabaseToken',
+    endpoint: req.originalUrl,
+    method: req.method,
+    userAgent: req.headers['user-agent']
+  });
+
+  baseLogger.debug({
+    hasAuthHeader: !!authHeader,
+    authHeaderPrefix: authHeader?.substring(0, 20),
+    allHeaders: Object.keys(req.headers)
+  }, 'Starting token validation');
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.log('Missing or invalid Authorization header');
+    baseLogger.warn('Missing or invalid Authorization header');
     res.status(401).json({ error: 'Missing or invalid Authorization header' });
     return;
   }
 
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-  console.log('Token length:', token.length);
+  baseLogger.debug({ tokenLength: token.length }, 'Extracted bearer token');
 
   try {
     // Verify using our AUGMENTOS_AUTH_JWT_SECRET instead of Supabase directly
@@ -51,37 +83,106 @@ const validateSupabaseToken = async (req: Request, res: Response, next: NextFunc
     const userData = jwt.verify(token, AUGMENTOS_AUTH_JWT_SECRET);
 
     if (!userData || !(userData as jwt.JwtPayload).email) {
-      console.error('No user or email in token payload');
+      baseLogger.error({ hasUserData: !!userData, tokenPayload: userData }, 'No user or email in token payload');
       res.status(401).json({ error: 'Invalid token data' });
       return;
     }
 
-    console.log('User authenticated:', (userData as jwt.JwtPayload).email);
+    const userEmail = ((userData as jwt.JwtPayload).email as string).toLowerCase();
+    const userLogger = baseLogger.child({ userId: userEmail });
+
+    userLogger.info({ tokenIssued: (userData as jwt.JwtPayload).iat }, 'User authenticated successfully');
 
     // Add developer email to request object
-    (req as DevPortalRequest).developerEmail = ((userData as jwt.JwtPayload).email as string).toLowerCase();
+    (req as DevPortalRequest).developerEmail = userEmail;
 
     // Check for organization context in headers
     const orgIdHeader = req.headers['x-org-id'];
+    userLogger.debug({
+      orgIdHeader,
+      hasOrgIdHeader: !!orgIdHeader,
+      orgIdHeaderType: typeof orgIdHeader,
+      orgIdHeaderValue: orgIdHeader?.toString(),
+      allRelevantHeaders: {
+        'x-org-id': req.headers['x-org-id'],
+        'x-organization-id': req.headers['x-organization-id'],
+        'organization-id': req.headers['organization-id']
+      }
+    }, 'Checking organization ID header');
+
     if (orgIdHeader && typeof orgIdHeader === 'string') {
-      (req as DevPortalRequest).currentOrgId = new Types.ObjectId(orgIdHeader);
+      try {
+        const orgObjectId = new Types.ObjectId(orgIdHeader);
+        (req as DevPortalRequest).currentOrgId = orgObjectId;
+        userLogger.info({
+          orgIdFromHeader: orgIdHeader,
+          orgObjectId: orgObjectId.toString()
+        }, 'Using organization ID from x-org-id header');
+      } catch (parseError) {
+        userLogger.error({
+          orgIdHeader,
+          parseError: parseError instanceof Error ? parseError.message : String(parseError)
+        }, 'Failed to parse organization ID from header');
+      }
     } else {
-      // If no org ID in header, get the user's default org
-      const user = await User.findOne({ email: (req as DevPortalRequest).developerEmail });
+      userLogger.debug('No valid x-org-id header, checking user defaultOrg from database');
+
+      const user = await User.findOne({ email: userEmail });
+      userLogger.debug({
+        userFound: !!user,
+        userDefaultOrg: user?.defaultOrg?.toString(),
+        userOrganizations: user?.organizations?.map(org => org.toString()),
+        organizationCount: user?.organizations?.length || 0,
+        hasDefaultOrg: !!(user?.defaultOrg)
+      }, 'User organization data from database');
+
       if (user && user.defaultOrg) {
         (req as DevPortalRequest).currentOrgId = user.defaultOrg;
+        userLogger.info({
+          defaultOrgId: user.defaultOrg.toString(),
+          totalUserOrgs: user.organizations?.length || 0
+        }, 'Using user default organization from database');
+      } else {
+        userLogger.warn({
+          hasUser: !!user,
+          hasDefaultOrg: !!(user?.defaultOrg),
+          availableOrgs: user?.organizations?.length || 0,
+          userOrganizations: user?.organizations?.map(org => org.toString()) || []
+        }, 'No default organization found for user');
       }
     }
 
-    // Ensure we have an organization ID
-    if (!(req as DevPortalRequest).currentOrgId) {
+    const finalOrgId = (req as DevPortalRequest).currentOrgId;
+    if (!finalOrgId) {
+      const user = await User.findOne({ email: userEmail });
+      userLogger.error({
+        orgIdHeader,
+        orgIdHeaderType: typeof orgIdHeader,
+        userHasDefaultOrg: !!(user?.defaultOrg),
+        userOrganizations: user?.organizations?.map(org => org.toString()) || [],
+        userDefaultOrgValue: user?.defaultOrg?.toString(),
+        reason: 'No organization context available from header or user default',
+        endpoint: req.originalUrl,
+        method: req.method
+      }, '🚨 ORGANIZATION CONTEXT FAILURE - returning 400 error');
+
       res.status(400).json({ error: 'No organization context provided' });
       return;
     }
 
+    userLogger.info({
+      organizationId: finalOrgId.toString(),
+      source: orgIdHeader ? 'x-org-id-header' : 'user-defaultOrg',
+      endpoint: req.originalUrl
+    }, '✅ Organization context resolved successfully');
+
     next();
   } catch (error) {
-    console.error('Token verification error:', error);
+    baseLogger.error({
+      error: error instanceof Error ? error.message : String(error),
+      tokenLength: token?.length,
+      errorType: error instanceof Error ? error.constructor.name : typeof error
+    }, 'Token verification error');
     res.status(500).json({ error: 'Authentication failed' });
     return;
   }
@@ -118,7 +219,13 @@ const autoInstallAppForDeveloper = async (packageName: string, developerEmail: s
 
     // Trigger app state change notification for any active sessions
     try {
-      sessionService.triggerAppStateChange(developerEmail);
+      // sessionService.triggerAppStateChange(developerEmail);
+      const userSession = UserSession.getById(user.email);
+      if (userSession) {
+        userSession.appManager.broadcastAppState();
+      } else {
+        logger.warn(`No active session found for developer ${developerEmail} to trigger app state change`);
+      }
     } catch (error) {
       logger.warn({ error, email: developerEmail, packageName }, 'Error sending app state notification after auto-install');
       // Non-critical error, installation succeeded
@@ -151,13 +258,18 @@ const getAuthenticatedUser = async (req: Request, res: Response): Promise<void> 
       defaultOrg: user.defaultOrg
     });
   } catch (error) {
-    console.error('Error fetching user data:', error);
+    const email = (req as DevPortalRequest).developerEmail;
+    const userLogger = logger.child({ userId: email, service: 'developer.routes', function: 'getAuthenticatedUser' });
+    userLogger.error({
+      error: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined
+    }, 'Error fetching user data');
     res.status(500).json({ error: 'Failed to fetch user data' });
   }
 };
 
 /**
- * Get developer's Third Party Apps (TPAs)
+ * Get developer's Apps
  */
 const getDeveloperApps = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -169,13 +281,19 @@ const getDeveloperApps = async (req: Request, res: Response): Promise<void> => {
 
     res.json(allApps);
   } catch (error) {
-    console.error('Error fetching developer TPAs:', error);
-    res.status(500).json({ error: 'Failed to fetch TPAs' });
+    const email = (req as DevPortalRequest).developerEmail;
+    const orgId = (req as DevPortalRequest).currentOrgId;
+    const userLogger = logger.child({ userId: email, organizationId: orgId?.toString(), service: 'developer.routes', function: 'getDeveloperApps' });
+    userLogger.error({
+      error: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined
+    }, 'Error fetching developer Apps');
+    res.status(500).json({ error: 'Failed to fetch Apps' });
   }
 };
 
 /**
- * Get a specific TPA by package name
+ * Get a specific App by package name
  */
 const getAppByPackageName = async (req: Request, res: Response) => {
   try {
@@ -183,53 +301,70 @@ const getAppByPackageName = async (req: Request, res: Response) => {
     const orgId = (req as DevPortalRequest).currentOrgId;
     const { packageName } = req.params;
 
-    const tpa = await appService.getAppByPackageName(packageName, email, orgId);
+    const app = await appService.getAppByPackageName(packageName, email, orgId);
 
-    if (!tpa) {
-      return res.status(404).json({ error: 'TPA not found' });
+    if (!app) {
+      return res.status(404).json({ error: 'App not found' });
     }
 
-    res.json(tpa);
+    res.json(app);
   } catch (error) {
-    console.error('Error fetching TPA:', error);
-    return res.status(500).json({ error: 'Failed to fetch TPA' });
+    const email = (req as DevPortalRequest).developerEmail;
+    const orgId = (req as DevPortalRequest).currentOrgId;
+    const { packageName } = req.params;
+    const userLogger = logger.child({ userId: email, organizationId: orgId?.toString(), packageName, service: 'developer.routes', function: 'getAppByPackageName' });
+    userLogger.error({
+      error: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined
+    }, 'Error fetching App');
+    return res.status(500).json({ error: 'Failed to fetch App' });
   }
 };
 
 /**
- * Create a new TPA
+ * Create a new App
  */
 const createApp = async (req: Request, res: Response) => {
   try {
     const email = (req as DevPortalRequest).developerEmail;
     const orgId = (req as DevPortalRequest).currentOrgId;
-    const tpaData = req.body;
+    const appData = req.body;
 
-    // Check if TPA with this package name already exists
-    const existingTpa = await appService.getAppByPackageName(tpaData.packageName);
-    if (existingTpa) {
+    // Check if App with this package name already exists
+    const existingApp = await appService.getAppByPackageName(appData.packageName);
+    if (existingApp) {
       return res.status(409).json({
-        error: `TPA with package name '${tpaData.packageName}' already exists`
+        error: `App with package name '${appData.packageName}' already exists`
       });
     }
 
     // Create app with organization ownership
     const result = await appService.createApp({
-      ...tpaData,
+      ...appData,
       organizationId: orgId
     }, email);
 
     // Auto-install the app for the developer who created it
-    autoInstallAppForDeveloper(tpaData.packageName, email);
+    autoInstallAppForDeveloper(appData.packageName, email);
 
     res.status(201).json(result);
   } catch (error: any) {
-    console.error('Error creating TPA:', error);
+    const email = (req as DevPortalRequest).developerEmail;
+    const orgId = (req as DevPortalRequest).currentOrgId;
+    const appData = req.body;
+    const userLogger = logger.child({ userId: email, organizationId: orgId?.toString(), packageName: appData?.packageName, service: 'developer.routes', function: 'createApp' });
+
+    userLogger.error({
+      error: error instanceof Error ? error.message : String(error),
+      errorCode: error.code,
+      errorStack: error instanceof Error ? error.stack : undefined,
+      isDuplicateKey: error.code === 11000
+    }, 'Error creating App');
 
     // Handle duplicate key error specifically
     if (error.code === 11000 && error.keyPattern?.packageName) {
       return res.status(409).json({
-        error: `TPA with package name '${error.keyValue.packageName}' already exists`
+        error: `App with package name '${error.keyValue.packageName}' already exists`
       });
     }
 
@@ -238,20 +373,20 @@ const createApp = async (req: Request, res: Response) => {
 };
 
 /**
- * Update an existing TPA
+ * Update an existing App
  */
 const updateApp = async (req: Request, res: Response) => {
   try {
     const email = (req as DevPortalRequest).developerEmail;
     const orgId = (req as DevPortalRequest).currentOrgId;
     const { packageName } = req.params;
-    const tpaData = req.body;
+    const appData = req.body;
 
-    const updatedTpa = await appService.updateApp(packageName, tpaData, email, orgId);
+    const updatedApp = await appService.updateApp(packageName, appData, email, orgId);
 
-    res.json(updatedTpa);
+    res.json(updatedApp);
   } catch (error: any) {
-    console.error('Error updating TPA:', error);
+    console.error('Error updating App:', error);
 
     // Check for specific error types
     if (error.message.includes('not found')) {
@@ -268,12 +403,12 @@ const updateApp = async (req: Request, res: Response) => {
     }
 
     // Return the actual error message instead of a generic one
-    res.status(500).json({ error: error.message || 'Failed to update TPA' });
+    res.status(500).json({ error: error.message || 'Failed to update App' });
   }
 };
 
 /**
- * Delete a TPA
+ * Delete a App
  */
 const deleteApp = async (req: Request, res: Response) => {
   try {
@@ -283,9 +418,9 @@ const deleteApp = async (req: Request, res: Response) => {
 
     await appService.deleteApp(packageName, email, orgId);
 
-    return res.status(200).json({ message: `TPA ${packageName} deleted successfully` });
+    return res.status(200).json({ message: `App ${packageName} deleted successfully` });
   } catch (error: any) {
-    console.error('Error deleting TPA:', error);
+    console.error('Error deleting App:', error);
 
     // Check for specific error types
     if (error.message.includes('not found')) {
@@ -296,12 +431,12 @@ const deleteApp = async (req: Request, res: Response) => {
       return res.status(403).json({ error: error.message });
     }
 
-    return res.status(500).json({ error: 'Failed to delete TPA' });
+    return res.status(500).json({ error: 'Failed to delete App' });
   }
 };
 
 /**
- * Regenerate API Key for a TPA
+ * Regenerate API Key for a App
  */
 const regenerateApiKey = async (req: Request, res: Response) => {
   try {
@@ -347,7 +482,7 @@ const getShareableLink = async (req: Request, res: Response) => {
     }
 
     // Generate a shareable URL directly to the app's page on the app store
-    const installUrl = `${process.env.APP_STORE_URL || 'https://store.augmentos.org'}/package/${packageName}`;
+    const installUrl = `${process.env.APP_STORE_URL || 'https://apps.mentra.glass'}/package/${packageName}`;
 
     res.json({ installUrl });
   } catch (error) {
@@ -453,22 +588,31 @@ const updateSharedEmails = async (req: Request, res: Response) => {
 };
 
 /**
- * Move a TPA to a different organization
+ * Move a App to a different organization
  */
 const moveToOrg = async (req: Request, res: Response) => {
-  console.log('moveToOrg handler called with:', {
-    packageName: req.params.packageName,
-    targetOrgId: req.body.targetOrgId,
-    sourceOrgId: (req as DevPortalRequest).currentOrgId?.toString(),
-    url: req.originalUrl,
-    method: req.method
+  const email = (req as DevPortalRequest).developerEmail;
+  const sourceOrgId = (req as DevPortalRequest).currentOrgId;
+  const { packageName } = req.params;
+  const { targetOrgId } = req.body;
+
+  const userLogger = logger.child({
+    userId: email,
+    organizationId: sourceOrgId?.toString(),
+    packageName,
+    service: 'developer.routes',
+    function: 'moveToOrg'
   });
 
+  userLogger.info({
+    packageName,
+    targetOrgId,
+    sourceOrgId: sourceOrgId?.toString(),
+    url: req.originalUrl,
+    method: req.method
+  }, 'moveToOrg handler called');
+
   try {
-    const email = (req as DevPortalRequest).developerEmail;
-    const sourceOrgId = (req as DevPortalRequest).currentOrgId;
-    const { packageName } = req.params;
-    const { targetOrgId } = req.body;
 
     if (!sourceOrgId || !targetOrgId) {
       return res.status(400).json({ error: 'Source and target organization IDs are required' });
@@ -503,7 +647,12 @@ const moveToOrg = async (req: Request, res: Response) => {
     // Return updated app
     return res.json(updatedApp);
   } catch (error: any) {
-    console.error('Error moving TPA to new organization:', error);
+    userLogger.error({
+      error: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      targetOrgId,
+      sourceOrgId: sourceOrgId?.toString()
+    }, 'Error moving App to new organization');
 
     // Check for specific error types
     if (error.message.includes('not found')) {
@@ -514,7 +663,274 @@ const moveToOrg = async (req: Request, res: Response) => {
       return res.status(403).json({ error: error.message });
     }
 
-    return res.status(500).json({ error: 'Failed to move TPA to new organization' });
+    return res.status(500).json({ error: 'Failed to move App to new organization' });
+  }
+};
+
+/**
+ * Upload an image to Cloudflare Images
+ */
+const uploadImage = async (req: Request, res: Response) => {
+  const email = (req as DevPortalRequest).developerEmail;
+  const orgId = (req as DevPortalRequest).currentOrgId;
+
+  const userLogger = logger.child({
+    userId: email,
+    organizationId: orgId?.toString(),
+    service: 'developer.routes',
+    function: 'uploadImage',
+    endpoint: req.originalUrl
+  });
+
+  userLogger.info({
+    hasFile: !!req.file,
+    fileName: req.file?.originalname,
+    fileSize: req.file?.size,
+    fileMimeType: req.file?.mimetype,
+    hasMetadata: !!req.body.metadata,
+    replaceImageId: req.body.replaceImageId,
+    bodyKeys: Object.keys(req.body),
+    organizationContextUsed: !!orgId,
+    organizationContextSource: orgId ? 'middleware-provided' : 'none'
+  }, 'Starting image upload process');
+
+  try {
+    if (!req.file) {
+      userLogger.warn('No file provided in upload request');
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Get Cloudflare credentials from environment
+    const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN;
+
+    if (!cloudflareAccountId || !cloudflareApiToken) {
+      userLogger.error({
+        hasAccountId: !!cloudflareAccountId,
+        hasApiToken: !!cloudflareApiToken
+      }, 'Cloudflare credentials not configured');
+      return res.status(500).json({ error: 'Image upload service not configured' });
+    }
+
+    // Parse metadata if provided
+    let metadata: any = {};
+    if (req.body.metadata) {
+      try {
+        metadata = JSON.parse(req.body.metadata);
+        userLogger.debug({ metadata }, 'Parsed upload metadata successfully');
+      } catch (e) {
+        userLogger.warn({
+          metadataRaw: req.body.metadata,
+          parseError: e instanceof Error ? e.message : String(e)
+        }, 'Failed to parse metadata - continuing with empty metadata');
+      }
+    }
+
+    // Check if we're replacing an existing image
+    const replaceImageId = req.body.replaceImageId;
+    if (replaceImageId) {
+      userLogger.info({ replaceImageId }, 'Will replace existing image after successful upload');
+    }
+
+    // Create form data for Cloudflare API
+    const formData = new FormData();
+    formData.append('file', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+    });
+
+    // Add metadata to help identify the image
+    const cfMetadata = {
+      uploadedBy: email,
+      uploadedAt: new Date().toISOString(),
+      organizationId: orgId?.toString(), // Add org context for tracking
+      ...(metadata.appPackageName && { appPackageName: metadata.appPackageName }),
+      ...(replaceImageId && { replacedImageId: replaceImageId }),
+    };
+
+    formData.append('metadata', JSON.stringify(cfMetadata));
+
+    userLogger.debug({
+      cloudflareMetadata: cfMetadata,
+      formDataKeys: ['file', 'metadata']
+    }, 'Prepared Cloudflare upload payload');
+
+    // Make request to Cloudflare Images API
+    const cloudflareUrl = `https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/images/v1`;
+
+    userLogger.info({
+      cloudflareUrl: cloudflareUrl.replace(cloudflareAccountId, '[ACCOUNT_ID]'),
+      fileSize: req.file.size,
+      fileName: req.file.originalname
+    }, 'Sending request to Cloudflare Images API');
+
+    try {
+      const response = await axios.post(cloudflareUrl, formData, {
+        headers: {
+          'Authorization': `Bearer ${cloudflareApiToken}`,
+          ...formData.getHeaders(),
+        },
+      });
+
+      userLogger.debug({
+        success: response.data.success,
+        hasResult: !!response.data.result,
+        hasErrors: !!(response.data.errors && response.data.errors.length > 0)
+      }, 'Received response from Cloudflare API');
+
+      if (!response.data.success) {
+        userLogger.error({
+          cloudflareErrors: response.data.errors,
+          responseStatus: response.status
+        }, 'Cloudflare API returned error response');
+        return res.status(500).json({ error: 'Failed to upload image to Cloudflare' });
+      }
+
+      const imageData = response.data.result;
+
+      // Get the delivery URL with correct account hash from Cloudflare response
+      // Try to find 'square' variant in the response variants
+      let deliveryUrl: string | undefined;
+
+      if (imageData.variants && Array.isArray(imageData.variants)) {
+        // Look for a square variant in the response
+        const squareVariant = imageData.variants.find((url: string) => url.includes('/square'));
+        if (squareVariant) {
+          deliveryUrl = squareVariant;
+        } else {
+          // Replace the last variant part with 'square'
+          const firstVariant = imageData.variants[0];
+          if (firstVariant && typeof firstVariant === 'string') {
+            deliveryUrl = firstVariant.replace(/\/[^\/]+$/, '/square');
+            userLogger.debug({ originalVariant: firstVariant, squareUrl: deliveryUrl }, 'Replaced variant with square');
+          } else {
+            userLogger.error('No cloudflare variants found');
+          }
+        }
+      } else {
+        userLogger.error({
+          hasVariants: !!imageData.variants,
+          variantsType: typeof imageData.variants,
+          variantsValue: imageData.variants
+        }, 'No variants array found');
+      }
+
+      if (!deliveryUrl) {
+        userLogger.error('No delivery URL found');
+        return res.status(500).json({ error: 'Failed to upload image to Cloudflare' });
+      }
+
+      userLogger.info({
+        imageId: imageData.id,
+        deliveryUrl,
+        variants: imageData.variants,
+        uploaded: imageData.uploaded
+      }, 'Image uploaded successfully to Cloudflare');
+
+      // If we were replacing an image, delete the old one
+      if (replaceImageId) {
+        try {
+          await axios.delete(
+            `https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/images/v1/${replaceImageId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${cloudflareApiToken}`,
+              },
+            }
+          );
+          userLogger.info({ deletedImageId: replaceImageId }, 'Successfully deleted old image');
+        } catch (deleteError) {
+          // Log but don't fail the request if delete fails
+          userLogger.warn({
+            replaceImageId,
+            deleteError: deleteError instanceof Error ? deleteError.message : String(deleteError),
+            deleteStatus: (deleteError as any)?.response?.status
+          }, 'Failed to delete old image - continuing anyway');
+        }
+      }
+
+      // Return the image URL and ID
+      const responseData = {
+        url: deliveryUrl,
+        imageId: imageData.id,
+      };
+
+      userLogger.info(responseData, 'Image upload completed successfully');
+      res.json(responseData);
+
+    } catch (cfError: any) {
+      userLogger.error({
+        cloudflareError: cfError.response?.data || cfError.message,
+        status: cfError.response?.status,
+        statusText: cfError.response?.statusText,
+        errorType: cfError.constructor.name
+      }, 'Cloudflare API request failed');
+      return res.status(500).json({
+        error: 'Failed to upload image',
+        details: cfError.response?.data?.errors?.[0]?.message || 'Unknown error'
+      });
+    }
+
+  } catch (error) {
+    userLogger.error({
+      error: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      errorType: error instanceof Error ? error.constructor.name : typeof error
+    }, 'Error in image upload handler');
+    return res.status(500).json({ error: 'Internal server error during image upload' });
+  }
+};
+
+/**
+ * Delete an image from Cloudflare Images
+ */
+const deleteImage = async (req: Request, res: Response) => {
+  try {
+    const email = (req as DevPortalRequest).developerEmail;
+    const { imageId } = req.params;
+
+    if (!imageId) {
+      return res.status(400).json({ error: 'Image ID is required' });
+    }
+
+    // Get Cloudflare credentials from environment
+    const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN;
+
+    if (!cloudflareAccountId || !cloudflareApiToken) {
+      logger.error('Cloudflare credentials not configured');
+      return res.status(500).json({ error: 'Image delete service not configured' });
+    }
+
+    // Delete from Cloudflare
+    try {
+      await axios.delete(
+        `https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/images/v1/${imageId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${cloudflareApiToken}`,
+          },
+        }
+      );
+
+      logger.info(`Image ${imageId} deleted by ${email}`);
+      res.json({ success: true, message: 'Image deleted successfully' });
+
+    } catch (cfError: any) {
+      if (cfError.response?.status === 404) {
+        return res.status(404).json({ error: 'Image not found' });
+      }
+
+      logger.error('Cloudflare API delete request failed:', cfError.response?.data || cfError.message);
+      return res.status(500).json({
+        error: 'Failed to delete image',
+        details: cfError.response?.data?.errors?.[0]?.message || 'Unknown error'
+      });
+    }
+
+  } catch (error) {
+    logger.error('Error in image delete handler:', error);
+    return res.status(500).json({ error: 'Internal server error during image deletion' });
   }
 };
 
@@ -526,13 +942,14 @@ router.put('/auth/profile', validateSupabaseToken, updateDeveloperProfile);
 
 // TEMPORARY DEBUG ROUTE - NO AUTH CHECK
 router.get('/debug/apps', (req: Request, res: Response): void => {
-  console.log('Debug route hit - bypassing auth');
+  const debugLogger = logger.child({ service: 'developer.routes', function: 'debugApps' });
+  debugLogger.warn('Debug route hit - bypassing auth');
   res.json([{
     name: 'Debug App',
     packageName: 'com.debug.app',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    tpaType: 'STANDARD',
+    appType: 'STANDARD',
     description: 'Debug mode app',
     publicUrl: 'http://localhost:3000'
   }]);
@@ -551,5 +968,9 @@ router.post('/apps/:packageName/publish', validateSupabaseToken, publishApp);
 router.patch('/apps/:packageName/visibility', validateSupabaseToken, updateAppVisibility);
 router.patch('/apps/:packageName/share-emails', validateSupabaseToken, updateSharedEmails);
 router.post('/apps/:packageName/move-org', validateSupabaseToken, moveToOrg);
+
+// Image upload routes
+router.post('/images/upload', validateSupabaseToken, upload.single('file'), uploadImage);
+router.delete('/images/:imageId', validateSupabaseToken, deleteImage);
 
 export default router;

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the testing system for the AugmentOS Dashboard. The testing system provides a way to visualize dashboard behavior in the terminal during development, allowing for quick iteration and debugging without requiring actual smart glasses hardware.
+This document outlines the testing system for the MentraOS Dashboard. The testing system provides a way to visualize dashboard behavior in the terminal during development, allowing for quick iteration and debugging without requiring actual smart glasses hardware.
 
 ## Testing Framework Design
 
@@ -10,7 +10,7 @@ The dashboard testing system consists of a test harness that provides:
 
 1. Visual representation of dashboard displays in the terminal
 2. Simulation of app lifecycle events (start, stop)
-3. Simulation of content updates from various TPAs
+3. Simulation of content updates from various Apps
 4. Monitoring of content rotation through queues
 5. Testing of app stop/cleanup behavior
 6. Visual validation of dashboard composition
@@ -32,7 +32,7 @@ DASHBOARD MODE: main
 ----------------------------------------
 TOP LEFT: 12:45 PM           TOP RIGHT: Battery: 85%
 ----------------------------------------
-BOTTOM LEFT: Weather         BOTTOM RIGHT (TPA): Meeting in 5m
+BOTTOM LEFT: Weather         BOTTOM RIGHT (App): Meeting in 5m
 ========================================
 ```
 
@@ -41,9 +41,9 @@ BOTTOM LEFT: Weather         BOTTOM RIGHT (TPA): Meeting in 5m
 ========================================
 DASHBOARD MODE: expanded
 ----------------------------------------
-TOP LEFT: 12:45 PM           TOP RIGHT (TPA): Weather 72°F
+TOP LEFT: 12:45 PM           TOP RIGHT (App): Weather 72°F
 ----------------------------------------
-MAIN AREA: [TPA Content Area]
+MAIN AREA: [App Content Area]
 ========================================
 ```
 
@@ -52,9 +52,9 @@ MAIN AREA: [TPA Content Area]
 ========================================
 DASHBOARD MODE: always_on
 ----------------------------------------
-TOP LEFT: 12:45 PM           TOP RIGHT (TPA): 2 notifications
+TOP LEFT: 12:45 PM           TOP RIGHT (App): 2 notifications
 ----------------------------------------
-MAIN AREA: [TPA Content Area]
+MAIN AREA: [App Content Area]
 ========================================
 ```
 
@@ -66,7 +66,7 @@ The test harness will be implemented as follows:
 class DashboardTestHarness {
   private dashboardManager: DashboardManager;
   private visualizer: TerminalVisualizer;
-  
+
   constructor(dashboardManager: DashboardManager) {
     this.dashboardManager = dashboardManager;
     this.visualizer = new TerminalVisualizer();
@@ -79,28 +79,28 @@ class DashboardTestHarness {
     const topRight = this.dashboardManager.getTopRight();
     const bottomLeft = this.dashboardManager.getBottomLeft();
     const bottomRight = this.dashboardManager.getBottomRight();
-    const tpaContent = this.dashboardManager.getTpaContent(mode);
-    
+    const appContent = this.dashboardManager.getAppContent(mode);
+
     // Display the layout in terminal
     this.visualizer.renderDashboard(mode, {
       topLeft,
       topRight,
       bottomLeft,
       bottomRight,
-      tpaContent
+      appContent
     });
   }
-  
+
   // Simulate app lifecycle events
-  simulateAppStart(tpaId: string): void {
-    console.log(`\n[TEST] App started: ${tpaId}`);
+  simulateAppStart(appId: string): void {
+    console.log(`\n[TEST] App started: ${appId}`);
     // App start logic
   }
-  
-  simulateAppStop(tpaId: string): void {
-    console.log(`\n[TEST] App stopped: ${tpaId}`);
-    this.dashboardManager.removeTpa(tpaId);
-    
+
+  simulateAppStop(appId: string): void {
+    console.log(`\n[TEST] App stopped: ${appId}`);
+    this.dashboardManager.removeApp(appId);
+
     // Check for needed updates
     for (const mode of Object.values(DashboardMode)) {
       if (this.dashboardManager.needsImmediateUpdate(mode)) {
@@ -109,34 +109,34 @@ class DashboardTestHarness {
       }
     }
   }
-  
+
   // Simulate content updates
-  simulateContentUpdate(tpaId: string, content: string, modes: DashboardMode[]): void {
-    console.log(`\n[TEST] Content update from ${tpaId}: "${content}" for modes: ${modes.join(', ')}`);
-    this.dashboardManager.addOrUpdateContent(tpaId, content, modes);
-    
+  simulateContentUpdate(appId: string, content: string, modes: DashboardMode[]): void {
+    console.log(`\n[TEST] Content update from ${appId}: "${content}" for modes: ${modes.join(', ')}`);
+    this.dashboardManager.addOrUpdateContent(appId, content, modes);
+
     // Show updated display for affected modes
     modes.forEach(mode => this.visualizeCurrentState(mode));
   }
-  
+
   // Run test scenarios
   runTestScenario(scenario: TestScenario): void {
     console.log(`\n[TEST] Running scenario: ${scenario.name}`);
     scenario.events.forEach(event => this.processEvent(event));
     this.summarizeResults();
   }
-  
+
   // Process a test event
   private processEvent(event: TestEvent): void {
     switch (event.type) {
       case 'app_start':
-        this.simulateAppStart(event.tpaId);
+        this.simulateAppStart(event.appId);
         break;
       case 'app_stop':
-        this.simulateAppStop(event.tpaId);
+        this.simulateAppStop(event.appId);
         break;
       case 'content_update':
-        this.simulateContentUpdate(event.tpaId, event.content, event.modes);
+        this.simulateContentUpdate(event.appId, event.content, event.modes);
         break;
       case 'mode_change':
         this.dashboardManager.setMode(event.mode);
@@ -151,7 +151,7 @@ class DashboardTestHarness {
         break;
     }
   }
-  
+
   // Output test summary
   private summarizeResults(): void {
     console.log("\n[TEST] Final dashboard states:");
@@ -173,10 +173,10 @@ interface TestScenario {
   events: TestEvent[];
 }
 
-type TestEvent = 
-  | { type: 'app_start'; tpaId: string }
-  | { type: 'app_stop'; tpaId: string }
-  | { type: 'content_update'; tpaId: string; content: string; modes: DashboardMode[] }
+type TestEvent =
+  | { type: 'app_start'; appId: string }
+  | { type: 'app_stop'; appId: string }
+  | { type: 'content_update'; appId: string; content: string; modes: DashboardMode[] }
   | { type: 'mode_change'; mode: DashboardMode }
   | { type: 'rotate_content'; mode: DashboardMode; count?: number };
 ```
@@ -200,7 +200,7 @@ Tests app behavior during lifecycle events:
 ### Load Test
 
 Tests system behavior under high load:
-- Many concurrent TPAs
+- Many concurrent Apps
 - Rapid content updates
 - Performance metrics
 

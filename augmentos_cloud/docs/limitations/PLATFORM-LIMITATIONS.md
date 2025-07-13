@@ -1,12 +1,12 @@
-# AugmentOS Platform Limitations
+# MentraOS Platform Limitations
 
-**Author:** Isaiah Ballah (github: isaiahb)  
-**Date:** March 25, 2025  
-**Version:** 1.0  
+**Author:** Isaiah Ballah (github: isaiahb)
+**Date:** March 25, 2025
+**Version:** 1.0
 
 ## 1. Overview
 
-This document outlines the key limitations and constraints of the AugmentOS platform that TPA developers need to understand. These limitations stem primarily from the hardware capabilities of the smart glasses, the architecture of the AugmentOS Cloud, and design decisions made to maximize performance and battery life. Understanding these limitations will help you design TPAs that work effectively within the platform's constraints.
+This document outlines the key limitations and constraints of the MentraOS platform that App developers need to understand. These limitations stem primarily from the hardware capabilities of the smart glasses, the architecture of the MentraOS Cloud, and design decisions made to maximize performance and battery life. Understanding these limitations will help you design Apps that work effectively within the platform's constraints.
 
 ## 2. Display and UI Limitations
 
@@ -34,7 +34,7 @@ session.layouts.showReferenceCard("Title", "Content text");
 
 ### 2.2 Text Formatting Constraints
 
-Text must be manually formatted by TPAs before sending to display:
+Text must be manually formatted by Apps before sending to display:
 
 - Text must be wrapped at appropriate lengths (typically 30-35 characters per line for English)
 - Chinese/Japanese characters require different wrapping (approximately 10-12 characters)
@@ -44,7 +44,7 @@ Text must be manually formatted by TPAs before sending to display:
 
 ```typescript
 // Example of manual text wrapping
-import { wrapText } from '@augmentos/utils';
+import { wrapText } from '@mentra/utils';
 const wrappedText = wrapText("Long text that needs to be wrapped", 30);
 session.layouts.showTextWall(wrappedText);
 ```
@@ -53,7 +53,7 @@ session.layouts.showTextWall(wrappedText);
 
 Content display has significant timing constraints:
 
-- TPAs must specify a `durationMs` for how long content should display
+- Apps must specify a `durationMs` for how long content should display
 - Content automatically disappears after the specified duration
 - Typical durations range from 3-20 seconds
 - No persistent displays (everything is temporary)
@@ -121,16 +121,16 @@ WebSocket-based communication has inherent limitations:
 
 The event subscription model has limitations:
 
-- TPAs must explicitly subscribe to every stream type they need
+- Apps must explicitly subscribe to every stream type they need
 - Subscriptions are coarse-grained (entire stream types)
 - Language-specific streams require special handling
 - No fine-grained control over data volume
-- Subscribing to high-volume streams (like audio) can overload TPAs
+- Subscribing to high-volume streams (like audio) can overload Apps
 
 ```typescript
 // Example of subscription handling
-const subMessage: TpaSubscriptionUpdate = {
-  type: TpaToCloudMessageType.SUBSCRIPTION_UPDATE,
+const subMessage: AppSubscriptionUpdate = {
+  type: AppToCloudMessageType.SUBSCRIPTION_UPDATE,
   packageName: "com.example.myapp",
   sessionId,
   subscriptions: [StreamType.TRANSCRIPTION, StreamType.HEAD_POSITION]
@@ -145,16 +145,16 @@ ws.send(JSON.stringify(subMessage));
 Limited persistence capabilities:
 
 - Session state is primarily in-memory
-- No built-in persistent storage for TPA data
+- No built-in persistent storage for App data
 - Session reconstruction after disconnection is limited
 - Background app state can be lost
 - No cross-session persistence without external storage
 
 ### 5.2 Display Contention
 
-Multiple TPAs compete for display space:
+Multiple Apps compete for display space:
 
-- Only one TPA can display content at a time (shared display)
+- Only one App can display content at a time (shared display)
 - System apps (e.g., transcription) have display priority
 - Display requests can be overridden by higher-priority content
 - No concept of UI layers or compositing
@@ -163,7 +163,7 @@ Multiple TPAs compete for display space:
 ```typescript
 // Example of forced display (will only work in certain cases)
 const displayRequest: DisplayRequest = {
-  type: TpaToCloudMessageType.DISPLAY_REQUEST,
+  type: AppToCloudMessageType.DISPLAY_REQUEST,
   view: ViewType.MAIN,
   packageName: "com.example.myapp",
   sessionId,
@@ -210,7 +210,7 @@ Error handling is complex:
 
 ## 7. Common Patterns and Workarounds
 
-Despite these limitations, TPAs can work effectively by following these patterns:
+Despite these limitations, Apps can work effectively by following these patterns:
 
 ### 7.1 Text Display Patterns
 
@@ -218,7 +218,7 @@ Despite these limitations, TPAs can work effectively by following these patterns
 // Break up long text into multiple displays
 function showLongMessage(session, longText) {
   const chunks = splitIntoChunks(longText, 200); // Split by character count
-  
+
   // Show chunks sequentially with increasing durations
   chunks.forEach((chunk, index) => {
     const wrappedText = wrapText(chunk, 30);
@@ -237,12 +237,12 @@ function showLongMessage(session, longText) {
 // Debouncing pattern for frequent updates (e.g., transcription)
 function debounceDisplay(sessionId, text) {
   const debounceDelay = 400; // ms
-  
+
   // Clear previous timer
   if (displayTimers[sessionId]) {
     clearTimeout(displayTimers[sessionId]);
   }
-  
+
   // Set new timer
   displayTimers[sessionId] = setTimeout(() => {
     session.layouts.showTextWall(text);
@@ -260,7 +260,7 @@ ws.on('close', () => {
   // Clean up all resources
   clearAllTimers();
   removeAllListeners();
-  
+
   // Attempt reconnection if appropriate
   if (shouldReconnect) {
     setTimeout(() => {
@@ -272,17 +272,17 @@ ws.on('close', () => {
 
 ## 8. Future Roadmap
 
-While these limitations currently exist, the AugmentOS platform is actively evolving. Future updates may address:
+While these limitations currently exist, the MentraOS platform is actively evolving. Future updates may address:
 
 1. **Improved Layout System**: More flexible layouts and composition
 2. **Automatic Resource Management**: Eliminating manual cleanup requirements
 3. **Enhanced Session Persistence**: Better state recovery after disconnections
 4. **Input Enhancements**: More input options and gesture recognition
-5. **Multi-App Display**: Ability for multiple TPAs to share display space
+5. **Multi-App Display**: Ability for multiple Apps to share display space
 6. **Improved Developer Tools**: Better debugging and monitoring
 
 ## 9. Conclusion
 
-Building effective TPAs for AugmentOS requires understanding these limitations and designing accordingly. Focus on simple, clear user experiences that work within the platform constraints rather than trying to overcome them. By embracing these limitations as design parameters, you can create TPAs that provide valuable functionality while offering a consistent, reliable experience for users.
+Building effective Apps for MentraOS requires understanding these limitations and designing accordingly. Focus on simple, clear user experiences that work within the platform constraints rather than trying to overcome them. By embracing these limitations as design parameters, you can create Apps that provide valuable functionality while offering a consistent, reliable experience for users.
 
-Remember that many of these limitations exist to protect battery life, ensure performance, and provide a consistent user experience across different glasses hardware. Working within these constraints rather than against them will lead to the most successful TPAs.
+Remember that many of these limitations exist to protect battery life, ensure performance, and provide a consistent user experience across different glasses hardware. Working within these constraints rather than against them will lead to the most successful Apps.

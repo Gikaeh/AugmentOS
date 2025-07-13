@@ -1,7 +1,7 @@
-// @augmentos/sdk
+// @mentra/sdk
 // packages/sdk/types/src/models.ts - Core models
 
-import { AppSettingType, AppState, Language, TpaType } from './enums';
+import { AppSettingType, AppState, Language, AppType } from './enums';
 
 
 // Tool parameter type definition
@@ -12,7 +12,7 @@ export interface ToolParameterSchema {
   required?: boolean;
 }
 
-// Tool schema definition for TPAs
+// Tool schema definition for Apps
 export interface ToolSchema {
   id: string;
   description: string;
@@ -31,14 +31,26 @@ export interface DeveloperProfile {
   logo?: string;
 }
 
-// Define PermissionType enum until it's added to the SDK
+// Define PermissionType enum with legacy support
 export enum PermissionType {
   MICROPHONE = 'MICROPHONE',
   LOCATION = 'LOCATION',
   CALENDAR = 'CALENDAR',
+
+  // Legacy notification permission (backward compatibility)
   NOTIFICATIONS = 'NOTIFICATIONS',
+
+  // New granular notification permissions
+  READ_NOTIFICATIONS = 'READ_NOTIFICATIONS',
+  POST_NOTIFICATIONS = 'POST_NOTIFICATIONS',
+
   ALL = 'ALL'
 }
+
+// Legacy permission mapping for backward compatibility
+export const LEGACY_PERMISSION_MAP = new Map<PermissionType, PermissionType[]>([
+  [PermissionType.NOTIFICATIONS, [PermissionType.READ_NOTIFICATIONS]]
+]);
 
 // Permission interface
 export interface Permission {
@@ -58,7 +70,7 @@ export interface AppI {
 
   webviewURL?: string;            // URL for phone UI
   logoURL: string;
-  tpaType: TpaType;               // Type of app
+  appType: AppType;               // Type of app
   appStoreId?: string;            // Which app store registered this app
 
   /**
@@ -125,6 +137,21 @@ export type AppSetting =
       value?: number;
     })
   | (BaseAppSetting & {
+      type: AppSettingType.NUMERIC_INPUT;
+      min?: number;
+      max?: number;
+      step?: number;
+      placeholder?: string;
+      defaultValue?: number;
+      value?: number;
+    })
+  | (BaseAppSetting & {
+      type: AppSettingType.TIME_PICKER;
+      showSeconds?: boolean;
+      defaultValue?: number; // Total seconds
+      value?: number; // Total seconds
+    })
+  | (BaseAppSetting & {
       type: AppSettingType.GROUP;
       title: string;
     })
@@ -138,10 +165,10 @@ export type AppSetting =
 export type AppSettings = AppSetting[];
 
 /**
- * TPA configuration file structure
- * Represents the schema in tpa_config.json
+ * App configuration file structure
+ * Represents the schema in app_config.json
  */
-export interface TpaConfig {
+export interface AppConfig {
   name: string;
   description: string;
   version: string;
@@ -150,11 +177,11 @@ export interface TpaConfig {
 }
 
 /**
- * Validate a TPA configuration object
+ * Validate a App configuration object
  * @param config Object to validate
  * @returns True if the config is valid
  */
-export function validateTpaConfig(config: any): config is TpaConfig {
+export function validateAppConfig(config: any): config is AppConfig {
   if (!config || typeof config !== 'object') return false;
 
   // Check required string properties
@@ -210,6 +237,17 @@ export function validateTpaConfig(config: any): config is TpaConfig {
                typeof setting.min === 'number' &&
                typeof setting.max === 'number' &&
                setting.min <= setting.max;
+
+      case AppSettingType.NUMERIC_INPUT:
+        return (setting.defaultValue === undefined || typeof setting.defaultValue === 'number') &&
+               (setting.min === undefined || typeof setting.min === 'number') &&
+               (setting.max === undefined || typeof setting.max === 'number') &&
+               (setting.step === undefined || typeof setting.step === 'number') &&
+               (setting.placeholder === undefined || typeof setting.placeholder === 'string');
+
+      case AppSettingType.TIME_PICKER:
+        return (setting.defaultValue === undefined || typeof setting.defaultValue === 'number') &&
+               (setting.showSeconds === undefined || typeof setting.showSeconds === 'boolean');
 
       case AppSettingType.GROUP:
         return typeof setting.title === 'string';

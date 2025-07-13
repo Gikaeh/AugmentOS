@@ -1,7 +1,7 @@
 // src/types/app.types.ts
 
-// Define TPA type enum
-export enum TpaType {
+// Define App type enum
+export enum AppType {
   STANDARD = 'standard',
   SYSTEM = 'system',
   BACKGROUND = 'background'
@@ -23,7 +23,8 @@ export interface AppI {
   publicUrl?: string;
   webviewURL?: string; // URL for phone UI
   logoURL: string;
-  tpaType?: TpaType; // Type of TPA
+  appType?: AppType; // Type of App
+  tpaType?: AppType; // TODO: remove this once we have migrated over
 
   // App details
   version?: string;
@@ -37,6 +38,7 @@ export interface AppI {
   developerId?: string; // Developer's email address
   isInstalled?: boolean;
   installedDate?: string;
+  uninstallable?: boolean; // Whether the app can be uninstalled
 
   // Organization information
   organizationId?: string; // Reference to organization

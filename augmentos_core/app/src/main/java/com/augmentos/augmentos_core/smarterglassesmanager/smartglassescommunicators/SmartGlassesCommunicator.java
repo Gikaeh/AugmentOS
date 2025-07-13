@@ -8,26 +8,27 @@ import android.util.Log;
 import com.augmentos.augmentoslib.events.GlassesTapOutputEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.SmartGlassesConnectionEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.hci.AudioProcessingCallback;
-import com.augmentos.augmentos_core.smarterglassesmanager.smartglassescommunicators.SmartGlassesFontSize;
-import com.augmentos.augmentos_core.smarterglassesmanager.smartglassescommunicators.SmartGlassesModes;
 import com.augmentos.augmentos_core.smarterglassesmanager.utils.SmartGlassesConnectionState;
 
 import org.greenrobot.eventbus.EventBus;
+import org.json.JSONObject;
 
 public abstract class SmartGlassesCommunicator {
     //basic glasses utils/settings
     public SmartGlassesConnectionState mConnectState = SmartGlassesConnectionState.DISCONNECTED;
     protected SmartGlassesModes currentMode;
-    
+
     // Audio callback for direct processing (replacing EventBus)
     public AudioProcessingCallback audioProcessingCallback;
-    
+
     public abstract void connectToSmartGlasses();
     public abstract void findCompatibleDeviceNames();
     public abstract void blankScreen();
     public abstract void destroy();
     public final String commandNaturalLanguageString = "Command: ";
     public final String finishNaturalLanguageString = "'finish command' when done";
+
+    public void setUpdatingScreen(boolean updatingScreen) {}
 
     //reference card
     public abstract void displayReferenceCardSimple(String title, String body);
@@ -94,8 +95,8 @@ public abstract class SmartGlassesCommunicator {
     private boolean isPending = false;
 
     public void connectionEvent(SmartGlassesConnectionState connectState) {
-        if (connectState == lastConnectState && isPending) {
-            // Ignore duplicate calls within debounce period
+        if (connectState == lastConnectState) {
+            // Ignore duplicate calls regardless of timing
             return;
         }
 
@@ -130,15 +131,15 @@ public abstract class SmartGlassesCommunicator {
     public void updateGlassesBrightness(int brightness) {}
     public void updateGlassesAutoBrightness(boolean autoBrightness) {}
     public void updateGlassesHeadUpAngle(int headUpAngle) {}
-    public void updateGlassesDashboardHeight(int height) {}
-    public void updateGlassesDepth(int depth) {}
+    public void updateGlassesDepthHeight(int depth, int height) {}
+    public void sendExitCommand() {}
 
     public void changeSmartGlassesMicrophoneState(boolean isMicrophoneEnabled) {}
-    
+
     /**
      * Registers an audio processing callback to receive audio data directly
      * instead of using EventBus. This is a battery optimization.
-     * 
+     *
      * @param callback The callback to register
      */
     public void registerAudioProcessingCallback(AudioProcessingCallback callback) {
@@ -146,11 +147,11 @@ public abstract class SmartGlassesCommunicator {
         Log.e("SmartGlassesCommunicator", "⭐⭐⭐ REGISTERED AUDIO CALLBACK: " +
               (callback != null ? "NOT NULL" : "NULL") + " in " + this.getClass().getSimpleName());
     }
-    
+
     /**
      * Sends a custom command to the smart glasses
      * This is a default implementation that can be overridden by specific communicators
-     * 
+     *
      * @param commandJson The command in JSON string format
      */
     public void sendCustomCommand(String commandJson) {
@@ -158,11 +159,23 @@ public abstract class SmartGlassesCommunicator {
         // Device-specific communicators should override this method
         // e.g., MentraLiveSGC will handle WiFi credentials commands
     }
-    
+
     /**
      * Requests the smart glasses to take a photo
+     *
+     * @param requestId The unique ID for this photo request
+     * @param appId The ID of the app requesting the photo
+     * @param webhookUrl The webhook URL where the photo should be uploaded directly
+     */
+    public void requestPhoto(String requestId, String appId, String webhookUrl) {
+        // Default implementation does nothing
+        Log.d("SmartGlassesCommunicator", "Photo request not implemented for this device");
+    }
+
+    /**
+     * Requests the smart glasses to take a photo (backward compatibility)
      * Default implementation does nothing - specific communicators should override
-     * 
+     *
      * @param requestId The unique ID for this photo request
      * @param appId The ID of the app requesting the photo
      */
@@ -170,17 +183,38 @@ public abstract class SmartGlassesCommunicator {
         // Default implementation does nothing
         Log.d("SmartGlassesCommunicator", "Photo request not implemented for this device");
     }
-    
+
     /**
-     * Requests the smart glasses to start a video stream
+     * Requests the smart glasses to start an RTMP stream
      * Default implementation does nothing - specific communicators should override
-     * 
+     *
+     * @param parameters Optional parameters for the stream
      */
-    public void requestVideoStream() {
+    public void requestRtmpStreamStart(JSONObject parameters) {
         // Default implementation does nothing
-        Log.d("SmartGlassesCommunicator", "Video stream request not implemented for this device");
+        Log.d("SmartGlassesCommunicator", "RTMP stream request not implemented for this device");
     }
-    
+
+    /**
+     * Requests the smart glasses to stop the current RTMP stream
+     * Default implementation does nothing - specific communicators should override
+     */
+    public void stopRtmpStream() {
+        // Default implementation does nothing
+        Log.d("SmartGlassesCommunicator", "RTMP stream stop not implemented for this device");
+    }
+
+    /**
+     * Sends a keep alive message for the current RTMP stream
+     * Default implementation does nothing - specific communicators should override
+     *
+     * @param message The keep alive message with streamId, ackId, and timestamp
+     */
+    public void sendRtmpStreamKeepAlive(JSONObject message) {
+        // Default implementation does nothing
+        Log.d("SmartGlassesCommunicator", "RTMP stream keep alive not implemented for this device");
+    }
+
     /**
      * Requests the smart glasses to scan for available WiFi networks
      * Default implementation does nothing - specific communicators should override
@@ -189,11 +223,11 @@ public abstract class SmartGlassesCommunicator {
         // Default implementation does nothing
         Log.d("SmartGlassesCommunicator", "WiFi scan request not implemented for this device");
     }
-    
+
     /**
      * Sends WiFi credentials to the smart glasses
      * Default implementation does nothing - specific communicators should override
-     * 
+     *
      * @param ssid The WiFi network name
      * @param password The WiFi password
      */

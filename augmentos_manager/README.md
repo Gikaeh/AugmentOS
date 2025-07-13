@@ -1,67 +1,132 @@
-# AugmentOS Setup Guide
-
-## Getting Started
-
-1. Configure Environment
-   - Copy `.env.example` to create your `.env` file
-   - Configure server settings in `.env` (default: localhost)
-
-2. Install & Start: `npm start`
-
-3. Launch the backend:
-
-From the augmentos_cloud folder: `./run.sh`
-
-4. Connecting your phone to your local backend:
-
-### Android
-You have two options:
-
-- Use your computer's local IP address:
-  - Find your IP with `ifconfig` or in System Preferences → Network
-  - Update your `.env` file with your computer's IP
-  - Ensure both your phone and computer are on the same WiFi network
-
-- Or create a localhost tunnel over USB (preferred for development):
-  ```
-  adb reverse tcp:8002 tcp:8002
-  ```
-
-### iOS
-For iOS devices, use your computer's local IP address:
-
-- Find your IP with `ifconfig` or in System Preferences → Network
-- Update your `.env` file with your computer's IP
-- Ensure both your iOS device and computer are on the same WiFi network
-- After changing the `.env`, rebuild the app in Xcode
+### Quickstart
 
 
+### Windows Setup
 
-## iOS Setup
+```bash
+// Clone directly to the C:\ directory to avoid path length limits on windows!
+git clone https://github.com/Mentra-Community/MentraOS
+git checkout dev
+```
 
-1. Install dependencies: `npm install`
-2. Install pods: `cd ios && pod install && cd ..`
-3. Open the workspace: `open ios/AugmentOS_Manager.xcworkspace`
-4. Run the app: `Product -> Run`
 
-### iOS Node Path Configuration
+```
+choco install -y nodejs-lts microsoft-openjdk17
+```
 
-By default, Xcode uses the `.xcode.env` file which contains `NODE_BINARY=$(command -v node)` to find your node installation. If you experience node-related build errors:
 
-1. Create a file at `ios/.xcode.env.local` with your specific node path:
-   ```
-   export NODE_BINARY=/path/to/your/node
-   ```
+## Android
+```
+pnpm install
+pnpm expo prebuild
+pnpm android
+```
 
-2. Tips for finding your node path:
-   - NVM users: Run `which node` in terminal and use that exact path
-   - Homebrew users: Typically `/opt/homebrew/bin/node`
-   - Make sure the node version matches project requirements (Node 18+)
-   - This file is gitignored so each developer can set their own path
+## iOS
+```
+pnpm install
+pnpm expo prebuild
+cd ios
+pod install
+cd .. && open ios/AOS.xcworkspace
+(install a dev build on your phone using xcode)
+pnpm run start
+```
 
-3. After making this change, clean the build and restart Xcode
+for pure JS changes once you have a build installed all you need to run is
+```pnpm run start```
 
-### Debugging
+## IF YOU HAVE ISSUES BUILDING DUE TO UI REFRESH, SEE HERE:
+Due to the UI refresh there will be some weird cache issues. Do this to fix them...
 
-- Try deleting the `ios/build`, `ios/Podfile.lock`, and `ios/Pods` folders and then re-running `pod install`
-- Try deleting XCode's derived data: `rm -rf ~/Library/Developer/Xcode/DerivedData`
+```
+pnpm install
+pnpm expo prebuild
+rm -rf android/build android/.gradle node_modules .expo .bundle android/app/build android/app/src/main/assets
+pnpm install
+./fix-react-native-symlinks.sh 
+pnpm android
+pnpm run start
+```
+
+### `./assets` directory
+
+This directory is designed to organize and store various assets, making it easy for you to manage and use them in your application. The assets are further categorized into subdirectories, including `icons` and `images`:
+
+```tree
+assets
+├── icons
+└── images
+```
+
+**icons**
+This is where your icon assets will live. These icons can be used for buttons, navigation elements, or any other UI components. The recommended format for icons is PNG, but other formats can be used as well.
+
+Ignite comes with a built-in `Icon` component. You can find detailed usage instructions in the [docs](https://github.com/infinitered/ignite/blob/master/docs/boilerplate/app/components/Icon.md).
+
+**images**
+This is where your images will live, such as background images, logos, or any other graphics. You can use various formats such as PNG, JPEG, or GIF for your images.
+
+Another valuable built-in component within Ignite is the `AutoImage` component. You can find detailed usage instructions in the [docs](https://github.com/infinitered/ignite/blob/master/docs/Components-AutoImage.md).
+
+How to use your `icon` or `image` assets:
+
+```typescript
+import { Image } from 'react-native';
+
+const MyComponent = () => {
+  return (
+    <Image source={require('../assets/images/my_image.png')} />
+  );
+};
+```
+
+## Running Maestro end-to-end tests
+
+Follow our [Maestro Setup](https://ignitecookbook.com/docs/recipes/MaestroSetup) recipe.
+
+
+___
+
+
+### General Codebase Notes and suggestions
+
+- Don't import `theme` from `@/theme` intead:
+```tsx
+import {useAppTheme} from "@/utils/useAppTheme"
+
+// and then in the component:
+function MyComponent() {
+  const {theme, themed} = useAppTheme();
+}
+```
+
+- Don't create Stylesheets, instead use themed(<name-of-style>)
+```tsx
+const $container: ThemedStyle<TextStyle> = ({colors, spacing}) => ({
+  color: colors.text,
+  fontSize: spacing.md,
+  flexWrap: "wrap",
+})
+```
+
+- Don't use expo router's router.push / replace / etc. instead use the `useNavigationHistory()` hook
+```tsx
+import {useNavigationHistory} from "@/contexts/NavigationHistoryContext"
+const {goBack, push, replace} = useNavigationHistory()
+```
+
+- Use the Ignite Components and their tx prop where applicable for translations
+- make sure to define your strings in en.ts
+- if you have to use strings in code, use the translate() function
+```tsx
+<Screen safeAreaEdges={["top"]} contentContainerStyle={themed($container)}>
+  <Text tx="settingsScreen:someSettingsText"/>
+  <Button
+    tx="alerts:showAlert"
+    onPress={() => {
+      showAlert(translate("alerts:someError"));
+    }}
+  />
+</Screen>
+```

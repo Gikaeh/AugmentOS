@@ -1,23 +1,8 @@
 // cloud/server/src/models/app.model.ts
 import mongoose, { Schema, Document, Types } from 'mongoose';
-import { AppI as _AppI, TpaType, ToolSchema, ToolParameterSchema, AppSetting, AppSettingType } from '@augmentos/sdk';
+import { AppI as _AppI, AppType, ToolSchema, ToolParameterSchema, AppSetting, AppSettingType, PermissionType, Permission } from '@mentra/sdk';
 
 export type AppStoreStatus = 'DEVELOPMENT' | 'SUBMITTED' | 'REJECTED' | 'PUBLISHED';
-
-// Define PermissionType enum until it's added to the SDK
-export enum PermissionType {
-  MICROPHONE = 'MICROPHONE',
-  LOCATION = 'LOCATION',
-  CALENDAR = 'CALENDAR',
-  NOTIFICATIONS = 'NOTIFICATIONS',
-  ALL = 'ALL'
-}
-
-// Permission interface
-export interface Permission {
-  type: PermissionType;
-  description?: string;
-}
 
 // Extend the AppI interface for our MongoDB document
 export interface AppI extends _AppI, Document {
@@ -69,6 +54,10 @@ export interface AppI extends _AppI, Document {
    * @deprecated Use organizationId with member management instead. Will be removed after migration.
    */
   sharedWithEmails?: string[];
+
+  onboardingInstructions?: string;
+
+  onboardingStatus?: Map<string, boolean>;
 }
 
 
@@ -76,10 +65,10 @@ export interface AppI extends _AppI, Document {
 const AppSchema = new Schema({
 
   // Type of app "background" | "standard" | "system_dashboard". "background by default"
-  tpaType: {
+  appType: {
     type: String,
-    enum: Object.values(TpaType),
-    default: TpaType.BACKGROUND
+    enum: Object.values(AppType),
+    default: AppType.BACKGROUND
   },
 
   // Appstore / Developer properties
@@ -99,7 +88,7 @@ const AppSchema = new Schema({
     type: Date
   },
 
-  // TPA AI Tools
+  // App AI Tools
   tools: [{
     id: {
       type: String,
@@ -138,7 +127,7 @@ const AppSchema = new Schema({
     }
   }],
 
-  // TPA Settings Configuration
+  // App Settings Configuration
   settings: [{
     type: {
       type: String,
@@ -230,6 +219,15 @@ const AppSchema = new Schema({
     type: [String],
     required: false,
     default: []
+  },
+  onboardingInstructions: {
+    type: String,
+    default: ''
+  },
+  onboardingStatus: {
+    type: Map,
+    of: Boolean,
+    default: {}
   }
 }, {
   strict: false,

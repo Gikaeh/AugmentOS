@@ -1,11 +1,11 @@
-import { TranscriptSegment } from '@augmentos/sdk';
+import { TranscriptSegment } from '@mentra/sdk';
 import { Server as HTTPServer } from 'http';
 
 interface SystemStats {
   activeSessions: number;
   totalSessions: number;
-  activeTpas: number;
-  totalTpas: number;
+  activeApps: number;
+  totalApps: number;
 }
 
 interface DebugSessionInfo {
@@ -69,7 +69,7 @@ type DebuggerEvent =
   | { type: 'SESSION_UPDATE'; sessionId: string; data: Partial<DebugSessionInfo> }
   | { type: 'SESSION_DISCONNECTED'; sessionId: string; timestamp: string }
   | { type: 'SESSION_CONNECTED'; sessionId: string; timestamp: string }
-  | { type: 'TPA_STATE_CHANGE'; sessionId: string; tpaId: string; state: any }
+  | { type: 'APP_STATE_CHANGE'; sessionId: string; appId: string; state: any }
   | { type: 'DISPLAY_UPDATE'; sessionId: string; display: any }
   | { type: 'TRANSCRIPTION_UPDATE'; sessionId: string; transcript: any }
   | { type: 'SYSTEM_STATS_UPDATE'; stats: SystemStats };
@@ -103,8 +103,8 @@ export class DebugService {
       loadingApps: Array.from(session.loadingApps || []),
       isTranscribing: Boolean(session.isTranscribing),
       transcript: {
-        segments: Array.isArray(session.transcript?.segments) ? session.transcript.segments : [],
-        languageSegments: session.transcript?.languageSegments || {}
+        segments: [],
+        availableLanguages: []
       },
       subscriptionManager: {
         subscriptions: session.subscriptionManager?.subscriptions ?
@@ -173,14 +173,14 @@ export class DebugService {
       console.warn('🛑 [DebugService] Attempted to setup debug routes in production environment!');
       return; // Don't set up routes in production
     }
-    
+
     console.log(`🔌 [DebugService] Setting up debug routes`);
-    
+
     // Add middleware to handle SSE requests
     this.server.on('request', async (req, res) => {
       // Skip if not active (additional safety check)
       if (!this.isActive) return;
-      
+
       try {
         const url = new URL(req.url || '', `http://${req.headers.host}`);
 
@@ -261,26 +261,26 @@ export class DebugService {
     const activeSessions = Array.from(this.sessions.values()).filter(s => !s.disconnectedAt).length;
     const totalSessions = this.sessions.size;
 
-    let activeTpas = 0;
-    let totalTpas = 0;
+    let activeApps = 0;
+    let totalApps = 0;
 
     this.sessions.forEach(session => {
-      totalTpas += (session.installedApps?.length || 0);
-      activeTpas += (session.activeAppSessions?.length || 0);
+      totalApps += (session.installedApps?.length || 0);
+      activeApps += (session.activeAppSessions?.length || 0);
     });
 
     return {
       activeSessions,
       totalSessions,
-      activeTpas,
-      totalTpas
+      activeApps,
+      totalApps
     };
   }
 
   // Broadcast events to all connected clients
   private broadcastEvent(event: DebuggerEvent) {
     if (!this.isActive) return; // Skip if debug service is not active
-    
+
     const message = `event: ${event.type.toLowerCase()}\ndata: ${JSON.stringify(event)}\n\n`;
     this.clients.forEach(client => {
       try {
@@ -296,7 +296,7 @@ export class DebugService {
   // Public methods for updating session state
   public updateSession(sessionId: string, data: Partial<DebugSessionInfo>) {
     if (!this.isActive) return; // Skip if debug service is not active
-    
+
     const session = this.sessions.get(sessionId);
     if (session) {
       const updatedSession = { ...session, ...data };
@@ -311,7 +311,7 @@ export class DebugService {
 
   public sessionConnected(sessionId: string, session: DebugSessionInfo) {
     if (!this.isActive) return; // Skip if debug service is not active
-    
+
     this.sessions.set(sessionId, session);
     this.broadcastEvent({
       type: 'SESSION_CONNECTED',
@@ -322,7 +322,7 @@ export class DebugService {
 
   public sessionDisconnected(sessionId: string) {
     if (!this.isActive) return; // Skip if debug service is not active
-    
+
     const session = this.sessions.get(sessionId);
     if (session) {
       this.sessions.set(sessionId, { ...session, disconnectedAt: new Date().toISOString() });
@@ -334,20 +334,20 @@ export class DebugService {
     }
   }
 
-  public updateTPAState(sessionId: string, tpaId: string, state: any) {
+  public updateAppState(sessionId: string, appId: string, state: any) {
     if (!this.isActive) return; // Skip if debug service is not active
-    
+
     this.broadcastEvent({
-      type: 'TPA_STATE_CHANGE',
+      type: 'APP_STATE_CHANGE',
       sessionId,
-      tpaId,
+      appId,
       state
     });
   }
 
   public updateDisplay(sessionId: string, display: any) {
     if (!this.isActive) return; // Skip if debug service is not active
-    
+
     this.broadcastEvent({
       type: 'DISPLAY_UPDATE',
       sessionId,
@@ -357,7 +357,7 @@ export class DebugService {
 
   public updateTranscription(sessionId: string, transcript: any) {
     if (!this.isActive) return; // Skip if debug service is not active
-    
+
     this.broadcastEvent({
       type: 'TRANSCRIPTION_UPDATE',
       sessionId,
@@ -367,10 +367,10 @@ export class DebugService {
 
   public updateSystemStats() {
     if (!this.isActive) return; // Skip if debug service is not active
-    
+
     this.broadcastEvent({
       type: 'SYSTEM_STATS_UPDATE',
       stats: this.calculateSystemStats()
     });
   }
-} 
+}

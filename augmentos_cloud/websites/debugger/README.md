@@ -1,12 +1,12 @@
-# AugmentOS Debugger
+# MentraOS Debugger
 
-A web-based debugger for monitoring and debugging AugmentOS sessions and TPAs.
+A web-based debugger for monitoring and debugging MentraOS sessions and Apps.
 
 ## Features
 
 - Real-time monitoring of active sessions
 - Detailed session state inspection
-- TPA (Third-Party Application) management
+- App (Third-Party Application) management
 - Display state monitoring
 - Audio and transcription status
 - System-wide statistics
@@ -86,8 +86,8 @@ Response:
   stats: {
     activeSessions: number;
     totalSessions: number;
-    activeTpas: number;
-    totalTpas: number;
+    activeApps: number;
+    totalApps: number;
   };
 }
 ```
@@ -102,4 +102,4 @@ Response:
 
 ## License
 
-This project is proprietary and confidential. Unauthorized copying, distribution, or use is strictly prohibited. 
+This project is proprietary and confidential. Unauthorized copying, distribution, or use is strictly prohibited.

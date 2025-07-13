@@ -6,14 +6,18 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <React/RCTEventEmitter.h>
 #import "./AOSModule.h"
-#import "AugmentOS-Swift.h"
+#import "MentraOS-Swift.h"
 
 @interface AOSModule ()
 @property (nonatomic, strong) AOSManager *aosManager;
 @end
 
 @implementation AOSModule
+
+// Static reference for event emission
+static AOSModule *sharedEmitter = nil;
 
 // Export the module for React Native
 RCT_EXPORT_MODULE(AOSModule);
@@ -22,24 +26,26 @@ RCT_EXPORT_MODULE(AOSModule);
     self = [super init];
     if (self) {
         _aosManager = [[AOSManager alloc] init];
+        // Set the shared emitter reference
+        sharedEmitter = self;
     }
     return self;
 }
 
-// Start scanning for devices
-RCT_EXPORT_METHOD(startScan:(RCTResponseSenderBlock)successCallback errorCallback:(RCTResponseSenderBlock)errorCallback) {
-    @try {
-        // Call the Swift startScan method
-        [self.aosManager.g1Manager RN_startScan];
-        successCallback(@[@"scanning_started"]);
-        
-        // Schedule to stop scan after 10 seconds
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self stopScan:nil errorCallback:nil];
-        });
-    }
-    @catch(NSException *exception) {
-        errorCallback(@[exception.description]);
+// Class method to get the shared emitter instance
++ (AOSModule *)sharedEmitter {
+    return sharedEmitter;
+}
+
+// Supported events - combined list from both classes
+- (NSArray<NSString *> *)supportedEvents {
+  return @[@"onReady", @"onPending", @"onFailure", @"onConnectionStateChanged", @"CoreMessageIntentEvent", @"CoreMessageEvent", @"WIFI_SCAN_RESULTS"];
+}
+
+// Method to emit events from other parts of the code
++ (void)emitEventWithName:(NSString *)eventName body:(id)body {
+    if (sharedEmitter && sharedEmitter.bridge) {
+        [sharedEmitter sendEventWithName:eventName body:body];
     }
 }
 

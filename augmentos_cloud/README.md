@@ -1,6 +1,6 @@
-# AugmentOS Cloud
+# MentraOS Cloud
 
-AugmentOS is a cloud-based operating system for smart glasses that enables real-time interactions through Third-Party Applications (TPAs). This repository contains the cloud backend and SDK.
+MentraOS is a cloud-based operating system for smart glasses that enables real-time interactions through Third-Party Applications (Apps). This repository contains the cloud backend and SDK.
 
 ## Quick Start
 
@@ -14,8 +14,8 @@ AugmentOS is a cloud-based operating system for smart glasses that enables real-
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/TeamOpenSmartGlasses/AugmentOS.git
-   cd AugmentOS/augmentos_cloud
+   git clone https://github.com/TeamOpenSmartGlasses/MentraOS.git
+   cd MentraOS/augmentos_cloud
    ```
 
 2. **Setup Docker network:**
@@ -27,7 +27,7 @@ AugmentOS is a cloud-based operating system for smart glasses that enables real-
    ```bash
    # Quick setup script (recommended)
    ./scripts/docker-setup.sh
-   
+
    # OR manual setup
    bun run setup-deps
    bun run dev
@@ -37,10 +37,10 @@ AugmentOS is a cloud-based operating system for smart glasses that enables real-
    ```bash
    # All logs
    bun run logs
-   
+
    # Cloud service logs
    bun run logs:cloud
-   
+
    # Specific service logs
    bun run logs:service <service-name>
    ```
@@ -83,8 +83,8 @@ AugmentOS is a cloud-based operating system for smart glasses that enables real-
    - Make changes to files in `packages/` directory
    - Run `bun run build` to rebuild
 
-2. **Create/modify a TPA:**
-   - Navigate to TPA directory: `cd packages/apps/<app-name>`
+2. **Create/modify a App:**
+   - Navigate to App directory: `cd packages/apps/<app-name>`
    - Start development: `bun run dev`
 
 3. **Deploy to staging:**
@@ -94,7 +94,7 @@ AugmentOS is a cloud-based operating system for smart glasses that enables real-
 
 ## Docker Setup
 
-For a comprehensive guide on running AugmentOS Cloud and TPAs in Docker, see [DOCKER_GUIDE.md](./DOCKER_GUIDE.md).
+For a comprehensive guide on running MentraOS Cloud and Apps in Docker, see [DOCKER_GUIDE.md](./DOCKER_GUIDE.md).
 
 ### Docker Tips
 
@@ -109,8 +109,8 @@ For detailed documentation, see the `/docs` directory:
 
 - **System Overview**: `docs/0. OVERVIEW.md`
 - **Architecture**: `docs/1. SYSTEM-ARCHITECTURE.md`
-- **TPA Session Management**: `docs/2. TPA-SESSION-MANAGEMENT.md`
-- **Developer Guidelines**: `docs/tpa/DISPLAY-GUIDELINES.md`
+- **App Session Management**: `docs/2. App-SESSION-MANAGEMENT.md`
+- **Developer Guidelines**: `docs/app/DISPLAY-GUIDELINES.md`
 
 ## Troubleshooting
 

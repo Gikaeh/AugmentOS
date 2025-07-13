@@ -1,8 +1,17 @@
-import { systemApps } from '../core/system-apps';
-import { ActiveDisplay, Layout, DisplayRequest, DisplayManagerI, UserSession, TpaToCloudMessageType, ViewType, LayoutType } from '@augmentos/sdk';
-import { logger as rootLogger } from '../logging/pino-logger';
+import { ActiveDisplay, Layout, DisplayRequest, DisplayManagerI, AppToCloudMessageType, ViewType, LayoutType } from '@mentra/sdk';
+import { SYSTEM_DASHBOARD_PACKAGE_NAME } from '../core/app.service';
 import { Logger } from 'pino';
 import { WebSocket } from 'ws';
+import axios from 'axios';
+
+
+const CLOUD_PUBLIC_HOST_NAME = "https://" + process.env.CLOUD_PUBLIC_HOST_NAME;
+
+// Extend DisplayRequest to include optional priority flag
+interface DisplayRequestWithPriority extends DisplayRequest {
+  priority?: boolean;
+}
+import UserSession from '../session/UserSession';
 
 interface DisplayState {
   currentDisplay: ActiveDisplay | null;
@@ -21,7 +30,7 @@ interface ThrottledRequest {
   timestamp: number;
 }
 
-class DisplayManager implements DisplayManagerI {
+class DisplayManager {
   private displayState: DisplayState = {
     currentDisplay: null,
     coreAppDisplay: null,
@@ -43,18 +52,20 @@ class DisplayManager implements DisplayManagerI {
   private userSession: UserSession;
   private mainApp: string = ""; // systemApps.captions.packageName; // Hardcode captions as core app
   private logger: Logger; // child logger for this service & user session.
+  private onboardingActive: boolean = false;
+  private onboardingEndTime: number = 0;
 
   /**
    * Returns the user ID safely, providing a fallback value if it's undefined
    * @returns The user ID or 'unknown-user' if undefined
    */
   private getUserId(): string {
-    return this.userSession?.userId || 'unknown-user';
+    return this.userSession.userId;
   }
 
   // Remove accessors since we're passing the DisplayManager directly
-  // TODO: the main app is the APP that's running that is a TpaType.STANDARD. there should only be 1 standard TPA running at a time.
-  // We need to make it so when a new standard TPA starts, it stops the previous one(s) even though there should only be 1 previous one.
+  // TODO: the main app is the APP that's running that is a AppType.STANDARD. there should only be 1 standard App running at a time.
+  // We need to make it so when a new standard App starts, it stops the previous one(s) even though there should only be 1 previous one.
   constructor(userSession: UserSession) {
     this.userSession = userSession;
 
@@ -73,49 +84,52 @@ class DisplayManager implements DisplayManagerI {
     this.logger.info({}, `[${userId}] DisplayManager initialized`);
   }
 
-  public handleAppStart(packageName: string, userSession: UserSession): void {
-    this.userSession = userSession;
+  /**
+   * Check onboarding status and show onboarding instructions if needed before normal boot
+   */
+  public handleAppStart(packageName: string): void {
 
-    const app = this.userSession.installedApps.find(app => app.packageName === packageName);
-    if (app && app.tpaType === 'standard') {
+    // const app = this.userSession.installedApps.find(app => app.packageName === packageName);
+    const app = this.userSession.installedApps.get(packageName);
+
+    if (app && app.appType === 'standard') {
       this.mainApp = packageName;
-      this.logger.info({ mainApp: this.mainApp }, `[${this.getUserId()}] Setting main app to ${this.mainApp}`);
+      this.logger.info({ mainApp: this.mainApp }, `[${this.userSession.userId}] Setting main app to ${this.mainApp}`);
     }
 
     // Don't show boot screen for dashboard
-    if (packageName === systemApps.dashboard.packageName) {
+    if (packageName === SYSTEM_DASHBOARD_PACKAGE_NAME) {
       this.logger.info({}, `[${this.getUserId()}] Dashboard starting`);
       return;
     }
 
     // Save current display before showing boot screen (if not dashboard)
     if (this.displayState.currentDisplay &&
-        this.displayState.currentDisplay.displayRequest.packageName !== systemApps.dashboard.packageName) {
+        this.displayState.currentDisplay.displayRequest.packageName !== SYSTEM_DASHBOARD_PACKAGE_NAME) {
 
       // Get the package name of the currently displayed content
       const currentDisplayPackage = this.displayState.currentDisplay.displayRequest.packageName;
-
-      // Check if the display is still valid/active using our enhanced check
       const displayIsValid = this.hasRemainingDuration(this.displayState.currentDisplay);
 
       // Only save the display if:
       // 1. The app that owns it is still running AND
       // 2. The display is still valid/active
-      if (userSession.activeAppSessions.includes(currentDisplayPackage) && displayIsValid) {
-        this.logger.info({ currentDisplayPackage }, `[${this.getUserId()}] Saving display from ${currentDisplayPackage} for restoration after boot`);
+      // if (userSession.activeAppSessions.includes(currentDisplayPackage) && displayIsValid) {
+      if (this.userSession.runningApps.has(currentDisplayPackage) && displayIsValid) {
+        this.logger.info({ currentDisplayPackage }, `[${this.userSession.userId}] Saving display from ${currentDisplayPackage} for restoration after boot`);
         this.displayState.savedDisplayBeforeBoot = this.displayState.currentDisplay;
-      } else if (!userSession.activeAppSessions.includes(currentDisplayPackage)) {
-        this.logger.info({ currentDisplayPackage }, `[${this.getUserId()}] Not saving display from ${currentDisplayPackage} - app is no longer running`);
+      } else if (!this.userSession.runningApps.has(currentDisplayPackage)) {
+        this.logger.info({ currentDisplayPackage }, `[${this.userSession.userId}] Not saving display from ${currentDisplayPackage} - app is no longer running`);
       } else if (!displayIsValid) {
-        this.logger.info({}, `[${this.getUserId()}] Not saving current display - display is no longer valid`);
+        this.logger.info({}, `[${this.userSession.userId}] Not saving current display - display is no longer valid`);
       }
     }
 
-    this.logger.info({ packageName }, `[${this.getUserId()}] Starting app ${packageName}`);
+    this.logger.info({ packageName }, `[${this.userSession.userId}] Starting app ${packageName}`);
     this.bootingApps.add(packageName);
     this.updateBootScreen();
 
-    setTimeout(() => {
+    setTimeout(async () => {
       this.logger.info({ packageName }, `[${this.getUserId()}] Boot complete for app ${packageName}`);
       this.bootingApps.delete(packageName);
       if (this.bootingApps.size === 0) {
@@ -123,8 +137,88 @@ class DisplayManager implements DisplayManagerI {
         this.clearDisplay('main');
         // Process any queued display requests
         this.processBootQueue();
+
+        // Onboarding logic: only for non-system apps, after boot
+        const userEmail = this.userSession.userId; // Assuming userId is email
+        if (userEmail && packageName !== SYSTEM_DASHBOARD_PACKAGE_NAME) {
+          try {
+            const onboardingStatus = await this.getOnboardingStatus(userEmail, packageName);
+            // console.log('4343 onboardingStatus', onboardingStatus);
+            if (!onboardingStatus) {
+              const instructions = await this.getOnboardingInstructions(packageName);
+              // console.log('4343 instructions', instructions);
+              if (instructions) {
+                // Show onboarding instructions as a display
+                const onboardingDisplay: DisplayRequest = {
+                  type: AppToCloudMessageType.DISPLAY_REQUEST,
+                  view: ViewType.MAIN,
+                  packageName,
+                  layout: {
+                    layoutType: LayoutType.TEXT_WALL,
+                    text: instructions
+                  },
+                  timestamp: new Date(),
+                  durationMs: 15000 // Show for 10 seconds or until user action
+                };
+                this.onboardingActive = true;
+                this.onboardingEndTime = Date.now() + 5000;
+                this.sendDisplay(onboardingDisplay);
+                this.logger.info({ packageName }, `[${this.getUserId()}] Showing onboarding instructions for ${packageName}`);
+                setTimeout(() => {
+                  this.onboardingActive = false;
+                }, 5000);
+                // console.log('4343 userEmail', userEmail);
+                // console.log('4343 packageName', packageName);
+                await this.completeOnboarding(userEmail, packageName);
+              }
+            }
+          } catch (err) {
+            this.logger.error({ err }, `[${this.getUserId()}] Error handling onboarding for ${packageName}`);
+          }
+        }
       }
     }, this.BOOT_DURATION);
+  }
+
+  /**
+   * Helper: Get onboarding status for user and app
+   */
+  private async getOnboardingStatus(email: string, packageName: string): Promise<boolean> {
+    try {
+      const response = await axios.get(`${CLOUD_PUBLIC_HOST_NAME}/api/onboarding/status`, { params: { email, packageName } });
+      // console.log('4343 response', response);
+      return !!response.data.hasCompletedOnboarding;
+    } catch (err) {
+      this.logger.error({ err }, `[${this.getUserId()}] Error fetching onboarding status`);
+      return false;
+    }
+  }
+
+  /**
+   * Helper: Get onboarding instructions for app
+   */
+  private async getOnboardingInstructions(packageName: string): Promise<string | null> {
+    try {
+      const response = await axios.get(`${CLOUD_PUBLIC_HOST_NAME}/api/onboarding/instructions`, { params: { packageName } });
+      return response.data.instructions || null;
+    } catch (err) {
+      this.logger.error({ err }, `[${this.getUserId()}] Error fetching onboarding instructions`);
+      return null;
+    }
+  }
+
+  /**
+   * Helper: Mark onboarding as complete for user and app
+   */
+  private async completeOnboarding(email: string, packageName: string): Promise<boolean> {
+    try {
+      const response = await axios.post(`${CLOUD_PUBLIC_HOST_NAME}/api/onboarding/complete`, { email, packageName });
+      // console.log('#$%^4343 response', response);
+      return !!response.data.success;
+    } catch (err) {
+      this.logger.error({ err }, `[${this.getUserId()}] Error completing onboarding`);
+      return false;
+    }
   }
 
   /**
@@ -181,7 +275,8 @@ class DisplayManager implements DisplayManagerI {
     if (this.displayState.savedDisplayBeforeBoot) {
       // Check if the app that owned the saved display is still running
       const savedAppName = this.displayState.savedDisplayBeforeBoot.displayRequest.packageName;
-      const isAppStillRunning = this.userSession?.activeAppSessions.includes(savedAppName);
+      // const isAppStillRunning = this.userSession.activeAppSessions.includes(savedAppName);
+      const isAppStillRunning = this.userSession.runningApps.has(savedAppName);
 
       // Check if the saved display is still valid using our enhanced check
       const isSavedDisplayValid = this.hasRemainingDuration(this.displayState.savedDisplayBeforeBoot);
@@ -221,9 +316,8 @@ class DisplayManager implements DisplayManagerI {
     this.showNextDisplay('boot_complete');
   }
 
-  public handleAppStop(packageName: string, userSession: UserSession): void {
-    this.userSession = userSession;
-    this.logger.info({ packageName }, `[${this.getUserId()}] 🛑 Stopping app: ${packageName}`);
+  public handleAppStop(packageName: string): void {
+    this.logger.info({ packageName }, `[${this.userSession.userId}] 🛑 Stopping app: ${packageName}`);
 
     // Get current booting state before removal
     const wasBooting = this.bootingApps.has(packageName);
@@ -244,9 +338,9 @@ class DisplayManager implements DisplayManagerI {
     // Handle boot screen update if app was booting
     if (wasBooting) {
       if (this.bootingApps.size === 0) {
-        this.logger.info({}, `[${this.getUserId()}] 🔄 Boot screen complete, clearing state`);
+        this.logger.info({}, `[${this.userSession.userId}] 🔄 Boot screen complete, clearing state`);
         // Make sure we clear current display if it was boot screen
-        if (this.displayState.currentDisplay?.displayRequest.packageName === systemApps.dashboard.packageName) {
+        if (this.displayState.currentDisplay?.displayRequest.packageName === SYSTEM_DASHBOARD_PACKAGE_NAME) {
           this.clearDisplay('main');
         }
         // Process any queued requests
@@ -256,7 +350,7 @@ class DisplayManager implements DisplayManagerI {
 
     // Always clear any background lock held by this app
     if (this.displayState.backgroundLock?.packageName === packageName) {
-      this.logger.info({ packageName }, `[${this.getUserId()}] 🔓 Clearing background lock for: ${packageName}`);
+      this.logger.info({ packageName }, `[${this.userSession.userId}] 🔓 Clearing background lock for: ${packageName}`);
       this.displayState.backgroundLock = null;
     }
 
@@ -268,19 +362,19 @@ class DisplayManager implements DisplayManagerI {
 
     // Also clear any saved display from this app
     if (this.displayState.savedDisplayBeforeBoot?.displayRequest.packageName === packageName) {
-      this.logger.info({ packageName }, `[${this.getUserId()}] 🧹 Clearing saved display from stopped app: ${packageName}`);
+      this.logger.info({ packageName }, `[${this.userSession.userId}] 🧹 Clearing saved display from stopped app: ${packageName}`);
       this.displayState.savedDisplayBeforeBoot = null;
     }
 
     // If this was the core app, clear its saved display and reset mainApp
     if (packageName === this.mainApp) {
-      this.logger.info({ packageName }, `[${this.getUserId()}] 🔄 Clearing core app display: ${packageName}`);
+      this.logger.info({ packageName }, `[${this.userSession.userId}] 🔄 Clearing core app display: ${packageName}`);
       this.displayState.coreAppDisplay = null;
       this.mainApp = ""; // Reset mainApp when a standard app is stopped
 
       // If core app was currently displaying, clear the display
       if (wasDisplaying) {
-        this.logger.info({ packageName }, `[${this.getUserId()}] 🔄 Core app was displaying, clearing display`);
+        this.logger.info({ packageName }, `[${this.userSession.userId}] 🔄 Core app was displaying, clearing display`);
         this.clearDisplay('main');
       }
     }
@@ -290,26 +384,25 @@ class DisplayManager implements DisplayManagerI {
     this.showNextDisplay('app_stop');
   }
 
-  public handleDisplayEvent(displayRequest: DisplayRequest, userSession: UserSession): boolean {
-    this.userSession = userSession;
+  public handleDisplayRequest(displayRequest: DisplayRequest): boolean {
 
     // Always show dashboard immediately
-    if (displayRequest.packageName === systemApps.dashboard.packageName) {
+    if (displayRequest.packageName === SYSTEM_DASHBOARD_PACKAGE_NAME) {
       return this.sendDisplay(displayRequest);
     }
 
     // During boot, queue display requests instead of blocking
     if (this.bootingApps.size > 0) {
-      this.logger.info({ packageName: displayRequest.packageName }, `[${this.getUserId()}] 🔄 Queuing display request during boot: ${displayRequest.packageName}`);
+      this.logger.info({ packageName: displayRequest.packageName }, `[${this.userSession.userId}] 🔄 Queuing display request during boot: ${displayRequest.packageName}`);
       const activeDisplay = this.createActiveDisplay(displayRequest);
       // Store in boot queue, overwriting any previous request from same app
       this.bootDisplayQueue.set(displayRequest.packageName, activeDisplay);
-      return true; // Return true so TPAs know their request was accepted
+      return true; // Return true so Apps know their request was accepted
     }
 
     // Handle core app display
     if (displayRequest.packageName === this.mainApp) {
-      this.logger.info({ packageName: displayRequest.packageName }, `[${this.getUserId()}] 📱 Core app display request: ${displayRequest.packageName}`);
+      this.logger.info({ packageName: displayRequest.packageName }, `[${this.userSession.userId}] 📱 Core app display request: ${displayRequest.packageName}`);
       const activeDisplay = this.createActiveDisplay(displayRequest);
       this.displayState.coreAppDisplay = activeDisplay;
 
@@ -320,55 +413,64 @@ class DisplayManager implements DisplayManagerI {
         this.displayState.currentDisplay?.displayRequest.packageName === this.displayState.backgroundLock?.packageName;
 
       if (!blockedByBackgroundApp) {
-        this.logger.info({ packageName: displayRequest.packageName }, `[${this.getUserId()}] ✅ Background not displaying or core app has the lock, showing core app`);
+        this.logger.info({ packageName: displayRequest.packageName }, `[${this.userSession.userId}] ✅ Background not displaying or core app has the lock, showing core app`);
         return this.showDisplay(activeDisplay);
       }
 
-      this.logger.info({ packageName: displayRequest.packageName, blockingApp: this.displayState.backgroundLock?.packageName }, `[${this.getUserId()}] ❌ Background app is displaying, core app blocked by ${this.displayState.backgroundLock?.packageName}`);
+      this.logger.info({ packageName: displayRequest.packageName, blockingApp: this.displayState.backgroundLock?.packageName }, `[${this.userSession.userId}] ❌ Background app is displaying, core app blocked by ${this.displayState.backgroundLock?.packageName}`);
       return false;
     }
 
     // Handle background app display
     const canDisplay = this.canBackgroundAppDisplay(displayRequest.packageName);
     if (canDisplay) {
-      this.logger.info({ packageName: displayRequest.packageName }, `[${this.getUserId()}] ✅ Background app can display: ${displayRequest.packageName}`);
+      this.logger.info({ packageName: displayRequest.packageName }, `[${this.userSession.userId}] ✅ Background app can display: ${displayRequest.packageName}`);
       const activeDisplay = this.createActiveDisplay(displayRequest);
       return this.showDisplay(activeDisplay);
     }
 
-    this.logger.info({ packageName: displayRequest.packageName }, `[${this.getUserId()}] ❌ Background app display blocked - no lock: ${displayRequest.packageName}`);
+    this.logger.info({ packageName: displayRequest.packageName }, `[${this.userSession.userId}] ❌ Background app display blocked - no lock: ${displayRequest.packageName}`);
     return false;
   }
 
   private showDisplay(activeDisplay: ActiveDisplay): boolean {
+    const displayRequest = activeDisplay.displayRequest as DisplayRequestWithPriority;
+    // Block all non-onboarding displays if onboardingActive and within 5 seconds
+    if (this.onboardingActive && Date.now() < this.onboardingEndTime) {
+      // Only allow onboarding display to show
+      if (!(displayRequest.layout && displayRequest.layout.layoutType === LayoutType.REFERENCE_CARD && displayRequest.layout.title === 'Welcome')) {
+        this.logger.info({ packageName: displayRequest.packageName }, `[${this.getUserId()}] 🚫 Onboarding active, ignoring display request`);
+        return false;
+      }
+    }
     // Check throttle
-    if (Date.now() - this.lastDisplayTime < this.THROTTLE_DELAY && !activeDisplay.displayRequest.forceDisplay) {
-      this.logger.info({ packageName: activeDisplay.displayRequest.packageName }, `[${this.getUserId()}] ⏳ Throttled display request, queuing`);
+    if (Date.now() - this.lastDisplayTime < this.THROTTLE_DELAY && !displayRequest.forceDisplay) {
+      this.logger.info({ packageName: displayRequest.packageName }, `[${this.getUserId()}] ⏳ Throttled display request, queuing`);
       // Add to throttle queue, indexed by package name
       this.enqueueThrottledDisplay(activeDisplay);
       return true; // Return true to indicate request was accepted
     }
 
-    const success = this.sendToWebSocket(activeDisplay.displayRequest, this.userSession?.websocket);
+    const success = this.sendToWebSocket(displayRequest, this.userSession?.websocket);
     if (success) {
       this.displayState.currentDisplay = activeDisplay;
       this.lastDisplayTime = Date.now();
 
       // If core app successfully displays while background app has lock but isn't showing anything,
       // release the background app's lock
-      if (activeDisplay.displayRequest.packageName === this.mainApp &&
+      if (displayRequest.packageName === this.mainApp &&
         this.displayState.backgroundLock &&
         this.displayState.currentDisplay?.displayRequest.packageName !== this.displayState.backgroundLock.packageName) {
-        this.logger.info({ packageName: activeDisplay.displayRequest.packageName, lockHolder: this.displayState.backgroundLock.packageName }, `[${this.getUserId()}] 🔓 Releasing background lock as core app took display: ${this.displayState.backgroundLock.packageName}`);
+        this.logger.info({ packageName: displayRequest.packageName, lockHolder: this.displayState.backgroundLock.packageName }, `[${this.getUserId()}] 🔓 Releasing background lock as core app took display: ${this.displayState.backgroundLock.packageName}`);
         this.displayState.backgroundLock = null;
       }
 
       // Update lastActiveTime if this is the lock holder
-      if (this.displayState.backgroundLock?.packageName === activeDisplay.displayRequest.packageName) {
+      if (this.displayState.backgroundLock?.packageName === displayRequest.packageName) {
         this.displayState.backgroundLock.lastActiveTime = Date.now();
       }
 
-      this.logger.info({ packageName: activeDisplay.displayRequest.packageName }, `[${this.getUserId()}] ✅ Display sent successfully: ${activeDisplay.displayRequest.packageName}`);
+      this.logger.info({ packageName: displayRequest.packageName }, `[${this.getUserId()}] ✅ Display sent successfully: ${displayRequest.packageName}`);
 
       // Set expiry timeout if duration specified
       if (activeDisplay.expiresAt) {
@@ -461,7 +563,8 @@ class DisplayManager implements DisplayManagerI {
 
       for (const [appName, request] of this.throttledRequests.entries()) {
         // Skip requests from apps that aren't running
-        if (!this.userSession.activeAppSessions.includes(appName)) {
+        // if (!this.userSession.activeAppSessions.includes(appName)) {
+        if (!this.userSession.runningApps.has(appName)) {
           continue;
         }
 
@@ -507,7 +610,8 @@ class DisplayManager implements DisplayManagerI {
       const now = Date.now();
 
       // Check if the app with the lock is still active/running
-      const isLockHolderStillRunning = this.userSession?.activeAppSessions.includes(packageName);
+      // const isLockHolderStillRunning = this.userSession?.activeAppSessions.includes(packageName);
+      const isLockHolderStillRunning = this.userSession.runningApps.has(packageName);
 
       // Check if lock should be released due to inactivity or app being stopped
       if (!isLockHolderStillRunning) {
@@ -565,8 +669,9 @@ class DisplayManager implements DisplayManagerI {
 
   private canBackgroundAppDisplay(packageName: string): boolean {
     // First check if the app is still running
-    if (!this.userSession || !this.userSession.activeAppSessions.includes(packageName)) {
-      this.logger.info({ packageName }, `[${this.getUserId()}] ❌ ${packageName} can't display - app not running`);
+    // if (!this.userSession || !this.userSession.activeAppSessions.includes(packageName)) {
+    if (!this.userSession || !this.userSession.runningApps.has(packageName)) {
+      this.logger.info({ packageName }, `[${this.userSession?.userId}] ❌ ${packageName} can't display - app not running`);
       return false;
     }
 
@@ -600,7 +705,7 @@ class DisplayManager implements DisplayManagerI {
     }
 
     // Check if the current lock holder is still running
-    const lockHolderStillRunning = this.userSession?.activeAppSessions.includes(
+    const lockHolderStillRunning = this.userSession.runningApps.has(
       this.displayState.backgroundLock.packageName
     );
 
@@ -623,20 +728,21 @@ class DisplayManager implements DisplayManagerI {
 
     const bootingAppNames = Array.from(this.bootingApps).map(packageName => {
       // Get the "name" of the app from looking into the userSession object.
-      const name = this.userSession?.installedApps.find(app => app.packageName === packageName)?.name;
+      // const name = this.userSession?.installedApps.find(app => app.packageName === packageName)?.name;
+      const name = this.userSession.installedApps.get(packageName)?.name;
       if (name) return name;
 
-      const app = Object.values(systemApps).find(app => app.packageName === packageName);
-      return app ? app.name : packageName;
+      // TODO(isaiah): We can fetch app from db to get the name if it's not in userSession's installedApps.
+      return packageName; // Fallback to package name if no name found
     });
 
     const bootRequest: DisplayRequest = {
-      type: TpaToCloudMessageType.DISPLAY_REQUEST,
+      type: AppToCloudMessageType.DISPLAY_REQUEST,
       view: ViewType.MAIN,
-      packageName: systemApps.dashboard.packageName,
+      packageName: SYSTEM_DASHBOARD_PACKAGE_NAME,
       layout: {
         layoutType: LayoutType.REFERENCE_CARD,
-        title: `// AugmentOS - Starting App${this.bootingApps.size > 1 ? 's' : ''}`,
+        title: `// MentraOS - Starting App${this.bootingApps.size > 1 ? 's' : ''}`,
         text: bootingAppNames.join(", ")
       },
       timestamp: new Date()
@@ -656,9 +762,9 @@ class DisplayManager implements DisplayManagerI {
     }
 
     const clearRequest: DisplayRequest = {
-      type: TpaToCloudMessageType.DISPLAY_REQUEST,
+      type: AppToCloudMessageType.DISPLAY_REQUEST,
       view: viewName as ViewType,
-      packageName: systemApps.dashboard.packageName,
+      packageName: SYSTEM_DASHBOARD_PACKAGE_NAME,
       layout: {
         layoutType: LayoutType.TEXT_WALL,
         text: ''
@@ -754,6 +860,20 @@ class DisplayManager implements DisplayManagerI {
       this.logger.error({ error }, `[${this.getUserId()}] ❌ WebSocket error sending display request`);
       return false;
     }
+  }
+
+  // Dispose method to clean up resources.
+  public dispose(): void {
+    this.logger.info({}, `[${this.userSession?.userId}] 🧹 DisplayManager disposed`);
+    this.bootingApps.clear();
+    this.bootDisplayQueue.clear();
+    this.throttledRequests.clear();
+    this.displayState = {
+      currentDisplay: null,
+      savedDisplayBeforeBoot: null,
+      coreAppDisplay: null,
+      backgroundLock: null
+    };
   }
 }
 

@@ -144,20 +144,18 @@ public class SmartGlassesRepresentative implements PhoneMicListener {
         }
 
         if (SmartGlassesManager.getSensingEnabled(context)) {
-            // If the glasses don't support a microphone or we're forcing phone mic, use the phone mic manager
-            if (!smartGlassesDevice.getHasInMic() || SmartGlassesManager.getForceCoreOnboardMic(context)) {
-                // Initialize the PhoneMicrophoneManager if needed
-                try {
-                    if (phoneMicManager == null) {
-                        Log.d(TAG, "Initializing PhoneMicrophoneManager for adaptive mic handling");
-                        phoneMicManager = new PhoneMicrophoneManager(context, audioProcessingCallback, this, this);
-                    }
-
-                    phoneMicManager.pauseRecording();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error initializing PhoneMicrophoneManager: " + e.getMessage());
-                    // Continue without microphone - we'll lose audio functionality but glasses should still work
+            // ALWAYS create the PhoneMicrophoneManager - it will handle ALL microphone decisions
+            try {
+                if (phoneMicManager == null) {
+                    Log.d(TAG, "Initializing PhoneMicrophoneManager as unified microphone manager");
+                    phoneMicManager = new PhoneMicrophoneManager(context, audioProcessingCallback, this, this);
                 }
+
+                // Let the PhoneMicrophoneManager decide which mic to use based on preferences and device capabilities
+                phoneMicManager.pauseRecording();
+            } catch (Exception e) {
+                Log.e(TAG, "Error initializing PhoneMicrophoneManager: " + e.getMessage());
+                // Continue without microphone - we'll lose audio functionality but glasses should still work
             }
         }
     }
@@ -252,18 +250,23 @@ public class SmartGlassesRepresentative implements PhoneMicListener {
         }
     }
 
-    public void updateGlassesDashboardHeight(int height) {
+    public void updateGlassesDepthHeight(int depth, int height) {
         if (smartGlassesCommunicator != null) {
-            smartGlassesCommunicator.updateGlassesDashboardHeight(height);
+            smartGlassesCommunicator.updateGlassesDepthHeight(depth, height);
         }
     }
 
-    public void updateGlassesDepth(int depth) {
+    public void sendExitCommand() {
         if (smartGlassesCommunicator != null) {
-            smartGlassesCommunicator.updateGlassesDepth(depth);
+            smartGlassesCommunicator.sendExitCommand();
         }
     }
-    
+
+    public void setUpdatingScreen(boolean updatingScreen) {
+        if (smartGlassesCommunicator != null) {
+            smartGlassesCommunicator.setUpdatingScreen(updatingScreen);
+        }
+    }
 
     @Subscribe
     public void onDisableBleScoEvent(DisableBleScoAudioEvent receivedEvent) {
@@ -277,7 +280,7 @@ public class SmartGlassesRepresentative implements PhoneMicListener {
             Log.d(TAG, "Switching to normal phone mic mode via PhoneMicrophoneManager");
             
             // Check if phone mic is explicitly forced by the user
-            if (SmartGlassesManager.getForceCoreOnboardMic(context)) {
+            if ("phone".equals(SmartGlassesManager.getPreferredMic(context))) {
                 // If user explicitly wants phone mic, switch to normal (non-SCO) mode
                 phoneMicManager.switchToNormalMode();
             } else {
@@ -293,16 +296,18 @@ public class SmartGlassesRepresentative implements PhoneMicListener {
     }
 
     public void changeBluetoothMicState(boolean enableBluetoothMic) {
+        // This method name is misleading - it's really just setMicrophoneEnabled
+        // Delegate all microphone decisions to PhoneMicrophoneManager
         if (phoneMicManager != null) {
             if (enableBluetoothMic) {
-                // Use phone mic manager to switch to SCO mode
-                Log.d(TAG, "Enabling Bluetooth SCO mic via PhoneMicrophoneManager");
-                phoneMicManager.switchToScoMode();
+                Log.d(TAG, "Enabling microphone via PhoneMicrophoneManager");
+                phoneMicManager.startPreferredMicMode();
             } else {
-                // When disabling, fully pause the microphone
-                Log.d(TAG, "Disabling Bluetooth SCO mic via PhoneMicrophoneManager");
+                Log.d(TAG, "Disabling microphone via PhoneMicrophoneManager");
                 phoneMicManager.pauseRecording();
             }
+        } else {
+            Log.w(TAG, "PhoneMicrophoneManager is null - cannot change mic state");
         }
     }
 
@@ -418,6 +423,11 @@ public class SmartGlassesRepresentative implements PhoneMicListener {
         } else {
             return smartGlassesCommunicator.getConnectionState();
         }
+    }
+    
+    //get the PhoneMicrophoneManager for preference changes
+    public PhoneMicrophoneManager getPhoneMicrophoneManager() {
+        return phoneMicManager;
     }
 
     public void showReferenceCard(String title, String body){
@@ -549,4 +559,5 @@ public class SmartGlassesRepresentative implements PhoneMicListener {
             Log.e(TAG, "Error handling permission error", e);
         }
     }
+    
 }

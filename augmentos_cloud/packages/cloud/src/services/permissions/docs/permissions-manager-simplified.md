@@ -8,15 +8,15 @@ Status: Implemented
 
 ### Problem Statement
 
-While we've implemented the permission declaration and display system, there's currently no enforcement mechanism ensuring TPAs (Third-Party Applications) can only access streams they've declared permissions for. This creates several issues:
+While we've implemented the permission declaration and display system, there's currently no enforcement mechanism ensuring Apps (Third-Party Applications) can only access streams they've declared permissions for. This creates several issues:
 
-1. **No Permission Validation**: TPAs can subscribe to any stream regardless of declared permissions
-2. **Developer Confusion**: No feedback when TPAs try to access streams without proper permissions
-3. **User Trust Gap**: The permissions displayed to users may not match actual TPA behavior
+1. **No Permission Validation**: Apps can subscribe to any stream regardless of declared permissions
+2. **Developer Confusion**: No feedback when Apps try to access streams without proper permissions
+3. **User Trust Gap**: The permissions displayed to users may not match actual App behavior
 
 This simplified implementation focuses on enforcing declared permissions at the subscription level:
 
-1. Ensuring TPAs can only subscribe to streams they've declared permissions for
+1. Ensuring Apps can only subscribe to streams they've declared permissions for
 2. Providing clear error messages when permissions are missing
 3. Implementing this without the complexity of the full permissions management system
 
@@ -25,7 +25,7 @@ This simplified implementation focuses on enforcing declared permissions at the 
 **Implementation Targets:**
 
 1. **Create Stream-Permission Mapping**: Define which stream types require which permissions
-2. **Add Subscription Validation**: Check permissions when TPAs subscribe to streams
+2. **Add Subscription Validation**: Check permissions when Apps subscribe to streams
 3. **Provide Clear Error Messages**: Return helpful messages when subscriptions are rejected
 4. **Keep Current Permission UI**: Continue using the existing permission declaration and display UI
 
@@ -50,16 +50,16 @@ const STREAM_TO_PERMISSION_MAP = new Map<string, PermissionType>([
   ['transcription', PermissionType.MICROPHONE],
   ['translation', PermissionType.MICROPHONE],
   ['vad', PermissionType.MICROPHONE],
-  
+
   // Location stream
   ['location_update', PermissionType.LOCATION],
-  
+
   // Calendar stream
   ['calendar_event', PermissionType.CALENDAR],
-  
+
   // Notification streams
-  ['phone_notification', PermissionType.NOTIFICATIONS],
-  ['notification_dismissed', PermissionType.NOTIFICATIONS],
+  ['phone_notification', PermissionType.READ_NOTIFICATIONS],
+  ['notification_dismissed', PermissionType.READ_NOTIFICATIONS],
 ]);
 ```
 
@@ -88,12 +88,12 @@ The subscription service will:
 Path: `/packages/cloud/src/services/permissions/simple-permission-checker.ts`
 
 ```typescript
-import { PermissionType } from '@augmentos/sdk';
+import { PermissionType } from '@mentra/sdk';
 import { AppI } from '../../models/app.model';
 
 /**
  * Simple Permission Checker
- * 
+ *
  * A lightweight service to check if apps have declared the necessary permissions
  * for the streams they're trying to subscribe to.
  */
@@ -105,16 +105,16 @@ export class SimplePermissionChecker {
     ['transcription', PermissionType.MICROPHONE],
     ['translation', PermissionType.MICROPHONE],
     ['vad', PermissionType.MICROPHONE],
-    
+
     // Location stream
     ['location_update', PermissionType.LOCATION],
-    
+
     // Calendar stream
     ['calendar_event', PermissionType.CALENDAR],
-    
+
     // Notification streams
-    ['phone_notification', PermissionType.NOTIFICATIONS],
-    ['notification_dismissed', PermissionType.NOTIFICATIONS],
+    ['phone_notification', PermissionType.READ_NOTIFICATIONS],
+    ['notification_dismissed', PermissionType.READ_NOTIFICATIONS],
   ]);
 
   /**
@@ -128,7 +128,7 @@ export class SimplePermissionChecker {
     if (streamType.startsWith('translation:')) {
       return PermissionType.MICROPHONE;
     }
-    
+
     // Check regular stream types
     return this.STREAM_TO_PERMISSION_MAP.get(streamType) || null;
   }
@@ -141,7 +141,7 @@ export class SimplePermissionChecker {
     if (app.permissions?.some(p => p.type === PermissionType.ALL)) {
       return true;
     }
-    
+
     return app.permissions?.some(p => p.type === permission) || false;
   }
 
@@ -158,7 +158,7 @@ export class SimplePermissionChecker {
 
     for (const subscription of subscriptions) {
       const requiredPermission = this.getRequiredPermissionForStream(subscription);
-      
+
       // If no permission required or app has the permission, allow
       if (!requiredPermission || this.hasPermission(app, requiredPermission)) {
         allowed.push(subscription);
@@ -190,22 +190,22 @@ updateSubscriptions(
 ): void {
   // Get app details
   const app = await App.findOne({ packageName }).lean();
-  
+
   if (!app) {
     throw new Error(`App ${packageName} not found`);
   }
-  
+
   // Filter subscriptions based on permissions
   const { allowed, rejected } = SimplePermissionChecker.filterSubscriptions(app, subscriptions);
-  
+
   // Log rejected subscriptions
   if (rejected.length > 0) {
     logger.warn(
       `Rejected ${rejected.length} subscriptions for ${packageName} due to missing permissions: ` +
       rejected.map(r => `${r.stream} (requires ${r.requiredPermission})`).join(', ')
     );
-    
-    // Send error message to TPA if connected
+
+    // Send error message to App if connected
     const connection = this.userSession?.appConnections.get(packageName);
     if (connection && connection.readyState === 1) {
       const errorMessage = {
@@ -218,11 +218,11 @@ updateSubscriptions(
         })),
         timestamp: new Date()
       };
-      
+
       connection.send(JSON.stringify(errorMessage));
     }
   }
-  
+
   // Continue with allowed subscriptions
   const key = `${sessionId}:${packageName}`;
   this.subscriptions.set(key, new Set(allowed));

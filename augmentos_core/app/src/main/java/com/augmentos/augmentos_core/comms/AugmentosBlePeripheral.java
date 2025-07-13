@@ -416,7 +416,7 @@ public class AugmentosBlePeripheral {
         }
         sendDataToAugmentOsManager(data.toString());
     }
-    
+
     public void sendWifiCredentialsRequestToManager(String deviceModel) {
         JSONObject data = new JSONObject();
         try {
@@ -471,16 +471,29 @@ public class AugmentosBlePeripheral {
         sendDataToAugmentOsManager(data.toString());
     }
 
-    public void sendAppInfoToManager(ThirdPartyEdgeApp tpa) {
+    public void sendAppInfoToManager(ThirdPartyEdgeApp app) {
 //        Log.d(TAG, "sendNotifyManager");
         JSONObject data = new JSONObject();
         try{
-            data.put("app_info", tpa.toJson(true));
+            data.put("app_info", app.toJson(true));
 
         } catch (JSONException e) {
             throw new RuntimeException(e);
         }
         sendDataToAugmentOsManager(data.toString());
+    }
+
+    public void sendAudioStopRequest(JSONObject audioStopParams) {
+        Log.d(TAG, "Forwarding audio stop request to manager: " + audioStopParams.toString());
+        JSONObject message = new JSONObject();
+        try {
+            message.put("command", "audio_stop_request");
+            message.put("params", audioStopParams);
+        } catch (JSONException e) {
+            Log.e(TAG, "Failed to create audio stop request message", e);
+            return;
+        }
+        sendDataToAugmentOsManager(message.toString());
     }
 
     public void sendGlassesBluetoothDiscoverResultToManager(String modelName, String deviceName) {

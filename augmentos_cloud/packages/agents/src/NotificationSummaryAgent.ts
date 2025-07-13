@@ -1,7 +1,7 @@
 import { Agent } from "./AgentInterface";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { HumanMessage } from "@langchain/core/messages";
-import { LLMProvider } from "@augmentos/utils";
+import { LLMProvider } from "@mentra/utils";
 
 // Define interfaces for notifications and response
 export interface NotificationRank {
@@ -93,7 +93,7 @@ export class NotificationSummaryAgent implements Agent {
         jsonText = jsonText.substring(0, jsonText.length - 3).trim();
       }
     }
-    
+
     try {
       const parsed: NotificationFilterResponse = JSON.parse(jsonText);
       if (
@@ -113,7 +113,7 @@ export class NotificationSummaryAgent implements Agent {
     }
     // Return an empty ranking if parsing fails.
     return { notification_ranking: [] };
-  }  
+  }
 
   /**
    * Handles the context which is expected to include a "notifications" field (an array).
@@ -132,10 +132,13 @@ export class NotificationSummaryAgent implements Agent {
         if (notification.timestamp && typeof notification.timestamp === "number") {
           // Convert from ms to a readable UTC string.
           notification.timestamp = new Date(notification.timestamp)
-            .toISOString()
-            .replace("T", " ")
-            .substring(0, 19);
+            .toISOString();
         }
+        // Clean title, content, and text fields of emojis and non-ASCII characters
+        const clean = (str: string) => typeof str === 'string' ? str.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]|[^\x00-\x7F]/gu, '') : str;
+        notification.title = clean(notification.title);
+        notification.content = clean(notification.content);
+        notification.text = clean(notification.text);
         return notification;
       });
 
@@ -149,7 +152,7 @@ export class NotificationSummaryAgent implements Agent {
       });
 
       const finalPrompt = await promptTemplate.format({
-        notifications: notificationsStr 
+        notifications: notificationsStr
       });
       // Initialize LLM with settings.
       const llmOptions: any = {};
@@ -158,7 +161,7 @@ export class NotificationSummaryAgent implements Agent {
 
       // Call the LLM.
       const response = await llm.invoke(finalPrompt);
-      
+
       // Expect the LLM response to have a "content" property.
       if (!response || !response.content) {
         // Fallback: return original notifications with default summary/rank
@@ -173,11 +176,11 @@ export class NotificationSummaryAgent implements Agent {
         }));
       }
 
-      const content = typeof response.content === 'string' 
-        ? response.content 
-        : Array.isArray(response.content) 
-          ? response.content[0].type === 'text' 
-            ? response.content[0].text 
+      const content = typeof response.content === 'string'
+        ? response.content
+        : Array.isArray(response.content)
+          ? response.content[0].type === 'text'
+            ? response.content[0].text
             : ''
           : '';
 

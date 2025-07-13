@@ -18,7 +18,7 @@ if (envFile.exists()) {
 
 android {
     namespace 'com.augmentos.augmentos_core'
-    compileSdk 33
+    compileSdk 34
 
     buildFeatures {
         aidl = true
@@ -28,14 +28,14 @@ android {
         namespace "com.augmentos.augmentos_core"
 
         minSdk 28
-        targetSdk 33
+        targetSdk 34
         versionCode 1
         versionName "1.0"
 
         // The actual buildConfigFields:
-        buildConfigField "String", "AUGMENTOS_HOST", "\"${envProperties['AUGMENTOS_HOST'] ?: ""}\""
-        buildConfigField "String", "AUGMENTOS_PORT", "\"${envProperties['AUGMENTOS_PORT'] ?: ""}\""
-        buildConfigField "String", "AUGMENTOS_SECURE", "\"${envProperties['AUGMENTOS_SECURE'] ?: ""}\""
+        buildConfigField "String", "MENTRAOS_HOST", "\"${envProperties['MENTRAOS_HOST'] ?: ""}\""
+        buildConfigField "String", "MENTRAOS_PORT", "\"${envProperties['MENTRAOS_PORT'] ?: ""}\""
+        buildConfigField "String", "MENTRAOS_SECURE", "\"${envProperties['MENTRAOS_SECURE'] ?: ""}\""
 
         ndk {
             //noinspection ChromeOsAbiSupport
@@ -102,7 +102,8 @@ dependencies {
     implementation project (":SmartGlassesManager")
 
     //location services
-    implementation 'com.google.android.gms:play-services-location:18.0.0'
+    implementation 'com.google.android.gms:play-services-base:18.2.0'
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
 
     //websocket
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
@@ -123,7 +124,7 @@ dependencies {
 //    implementation 'com.google.mlkit:text-recognition-korean:16.0.0'
 
     // To convert Chinese to Pinyin
-    implementation 'com.belerweb:pinyin4j:2.5.0'
+    //implementation 'com.belerweb:pinyin4j:2.5.0'
     implementation 'com.huaban:jieba-analysis:1.0.2'
 
     implementation 'io.reactivex.rxjava3:rxjava:3.0.0'

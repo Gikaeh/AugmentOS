@@ -1,13 +1,13 @@
 //backend/src/routes/apps.ts
 import express from 'express';
-import sessionService from '../services/core/session.service';
-import { TranscriptSegment } from '@augmentos/sdk';
+import sessionService from '../services/session/session.service';
+import { TranscriptSegment } from '@mentra/sdk';
 const router = express.Router();
 
 // GET /api/transcripts/:appSessionId
 // Headers:
-//   - X-API-Key: <tpa-api-key>
-//   - X-Package-Name: <tpa-package-name>
+//   - X-API-Key: <app-api-key>
+//   - X-Package-Name: <app-package-name>
 // Query Parameters:
 //   - duration: number (seconds to look back)
 //   - startTime?: ISO timestamp (optional alternative to duration)
@@ -24,7 +24,7 @@ router.get('/api/transcripts/:appSessionId', async (req, res) => {
     const language = (req.query.language as string) || 'en-US';
 
     console.log(`🔍 Fetching transcripts for session ${appSessionId}, language: ${language}`);
-    
+
     if (!duration && !startTime && !endTime) {
       return res.status(400).json({ error: 'duration, startTime, or endTime is required' });
     }
@@ -35,41 +35,32 @@ router.get('/api/transcripts/:appSessionId', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    let transcriptSegments: TranscriptSegment[] = [];
+    // Use TranscriptionManager to get transcript history
+    const timeRange: any = {};
     
-    // Check if we have language-specific segments
-    if (userSession.transcript.languageSegments?.has(language)) {
-      console.log(`✅ Found language-specific segments for ${language}`);
-      transcriptSegments = userSession.transcript.languageSegments.get(language) || [];
-    } else if (language === 'en-US') {
-      // Fallback to legacy segments for English 
-      console.log('⚠️ Using legacy segments for en-US');
-      transcriptSegments = userSession.transcript.segments;
-    } else {
-      console.log(`⚠️ No segments found for language ${language}`);
-      // Return empty array for languages we don't have
+    if (duration) {
+      timeRange.duration = parseInt(duration as string);
+    }
+    
+    // TODO: Add handling for startTime/endTime filters
+    if (startTime) {
+      timeRange.startTime = new Date(startTime as string);
+    }
+    
+    if (endTime) {
+      timeRange.endTime = new Date(endTime as string);
     }
 
-    // Apply time-based filtering
-    const filteredTranscriptSegments = transcriptSegments.filter((segment: TranscriptSegment) => {
-      const segmentTime = new Date(segment.timestamp);
-      const currentTime = new Date();
-      const secondsSinceNow = (currentTime.getTime() - segmentTime.getTime()) / 1000;
+    const transcriptSegments = userSession.transcriptionManager.getTranscriptHistory(
+      language,
+      Object.keys(timeRange).length > 0 ? timeRange : undefined
+    );
 
-      if (duration) {
-        const durationSeconds = parseInt(duration as string);
-        return secondsSinceNow <= durationSeconds;
-      }
-      
-      // TODO: Add handling for startTime/endTime filters
-      return true;
-    });
+    console.log(`💬 Returning ${transcriptSegments.length} transcript segments for language ${language}`);
 
-    console.log(`💬 Returning ${filteredTranscriptSegments.length} transcript segments for language ${language}`);
-    
     res.json({
       language: language,
-      segments: filteredTranscriptSegments
+      segments: transcriptSegments
     });
 
   } catch (error) {

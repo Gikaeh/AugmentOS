@@ -24,6 +24,7 @@ import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.util.SparseArray;
 
 import androidx.preference.PreferenceManager;
 
@@ -47,6 +48,7 @@ import com.augmentos.augmentos_core.smarterglassesmanager.utils.SmartGlassesConn
 import com.google.gson.Gson;
 import com.augmentos.smartglassesmanager.cpp.L3cCpp;
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.BatteryLevelEvent;
+import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.CaseEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.BrightnessLevelEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.GlassesBluetoothSearchDiscoverEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.GlassesBluetoothSearchStopEvent;
@@ -67,6 +69,9 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Map;
+import java.util.HashMap;
+import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.GlassesSerialNumberEvent;
 
 public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     private static final String TAG = "WearableAi_EvenRealitiesG1SGC";
@@ -107,12 +112,17 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     private boolean debugStopper = false;
     private boolean shouldUseAutoBrightness = false;
     private int brightnessValue;
+    private boolean updatingScreen = false;
 
     private static final long DELAY_BETWEEN_SENDS_MS = 5; //not using now
     private static final long DELAY_BETWEEN_CHUNKS_SEND = 5; //super small just in case
     private static final long DELAY_BETWEEN_ACTIONS_SEND = 250; //not using now
     private static final long HEARTBEAT_INTERVAL_MS = 15000;
     private static final long MICBEAT_INTERVAL_MS = (1000 * 60) * 30; //micbeat every 30 minutes
+    private int caseBatteryLevel = -1;
+    private boolean caseCharging = false;
+    private boolean caseOpen = false;
+    private boolean caseRemoved = true;
     private int batteryLeft = -1;
     private int batteryRight = -1;
     private int leftReconnectAttempts = 0;
@@ -208,10 +218,10 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
         //goHomeHandler = new Handler();
         this.smartGlassesDevice = smartGlassesDevice;
         preferredG1DeviceId = getPreferredG1DeviceId(context);
-        brightnessValue = 50;
-        shouldUseAutoBrightness = false;
+        brightnessValue = getSavedBrightnessValue(context);
+        shouldUseAutoBrightness = getSavedAutoBrightnessValue(context);
         this.bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        this.shouldUseGlassesMic = SmartGlassesManager.getSensingEnabled(context) && !SmartGlassesManager.getForceCoreOnboardMic(context);
+        this.shouldUseGlassesMic = SmartGlassesManager.getSensingEnabled(context) && !"phone".equals(SmartGlassesManager.getPreferredMic(context));
 
         //setup LC3 decoder
         if (lc3DecoderPtr == 0) {
@@ -553,6 +563,60 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
                                 EventBus.getDefault().post(new BatteryLevelEvent(minBatt, false));
                             }
                         }
+                        //CASE REMOVED
+                        else if (data.length > 1 && (data[0] & 0xFF) == 0xF5 && ((data[1] & 0xFF) == 0x07 || (data[1] & 0xFF) == 0x06)) {
+                            caseRemoved = true;
+                            Log.d("AugmentOsService", "CASE REMOVED");
+                            EventBus.getDefault().post(new CaseEvent(caseBatteryLevel, caseCharging, caseOpen, caseRemoved));
+                        }
+                        //CASE OPEN
+                        else if (data.length > 1 && (data[0] & 0xFF) == 0xF5 && (data[1] & 0xFF) == 0x08) {
+                            caseOpen = true;
+                            caseRemoved = false;
+                            EventBus.getDefault().post(new CaseEvent(caseBatteryLevel, caseCharging, caseOpen, caseRemoved));
+                        }
+                        //CASE CLOSED
+                        else if (data.length > 1 && (data[0] & 0xFF) == 0xF5 && (data[1] & 0xFF) == 0x0B) {
+                            caseOpen = false;
+                            caseRemoved = false;
+                            EventBus.getDefault().post(new CaseEvent(caseBatteryLevel, caseCharging, caseOpen, caseRemoved));
+                        }
+                        //CASE CHARGING STATUS
+                        else if (data.length > 3 && (data[0] & 0xFF) == 0xF5 && (data[1] & 0xFF) == 0x0E) {
+                            caseCharging = (data[2] & 0xFF) == 0x01;// TODO: verify this is correct
+                            EventBus.getDefault().post(new CaseEvent(caseBatteryLevel, caseCharging, caseOpen, caseRemoved));
+                        }
+                        //CASE CHARGING INFO
+                        else if (data.length > 3 && (data[0] & 0xFF) == 0xF5 && (data[1] & 0xFF) == 0x0F) {
+                            caseBatteryLevel = (data[2] & 0xFF);// TODO: verify this is correct
+                            EventBus.getDefault().post(new CaseEvent(caseBatteryLevel, caseCharging, caseOpen, caseRemoved));
+                        }
+    //   case .CASE_REMOVED:
+    //     print("REMOVED FROM CASE")
+    //     self.caseRemoved = true
+    //   case .CASE_OPEN:
+    //     self.caseOpen = true
+    //     self.caseRemoved = false
+    //     print("CASE OPEN");
+    //   case .CASE_CLOSED:
+    //     self.caseOpen = false
+    //     self.caseRemoved = false
+    //     print("CASE CLOSED");
+    //   case .CASE_CHARGING_STATUS:
+    //     guard data.count >= 3 else { break }
+    //     let status = data[2]
+    //     if status == 0x01 {
+    //       self.caseCharging = true
+    //       print("CASE CHARGING")
+    //     } else {
+    //       self.caseCharging = false
+    //       print("CASE NOT CHARGING")
+    //     }
+    //   case .CASE_CHARGE_INFO:
+    //     print("CASE CHARGE INFO")
+    //     guard data.count >= 3 else { break }
+    //     caseBatteryLevel = Int(data[2])
+    //     print("Case battery level: \(caseBatteryLevel)%")
                         //HEARTBEAT RESPONSE
                         else if (data.length > 0 && data[0] == 0x25) {
                             Log.d(TAG, "Heartbeat response received");
@@ -611,11 +675,12 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
                 Log.d(TAG, side + " glass RX characteristic found");
             }
 
-
             // Mark as connected but wait for setup below to update connection state
             if ("Left".equals(side)) {
                 isLeftConnected = true;
-                //Log.d(TAG, "PROC_QUEUE - left side setup complete");
+                Log.d(TAG, "PROC_QUEUE - left side setup complete");
+                
+                // Manufacturer data decoding moved to connection start
             } else {
                 isRightConnected = true;
                 //Log.d(TAG, "PROC_QUEUE - right side setup complete");
@@ -808,6 +873,7 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
 
         return leftId != null && leftId.equals(rightId);
     }
+
     public String parsePairingIdFromDeviceName(String input) {
         if (input == null || input.isEmpty()) return null;
         // Regular expression to match the number after "G1_"
@@ -832,13 +898,13 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
         return prefs.getString(SAVED_G1_ID_KEY, null);
     }
 
-//    public static int getSavedBrightnessValue(Context context){
-//        return Integer.parseInt(PreferenceManager.getDefaultSharedPreferences(context).getString(context.getResources().getString(R.string.SHARED_PREF_BRIGHTNESS), "50"));
-//    }
+    public static int getSavedBrightnessValue(Context context){
+        return Integer.parseInt(PreferenceManager.getDefaultSharedPreferences(context).getString(context.getResources().getString(R.string.SHARED_PREF_BRIGHTNESS), "50"));
+    }
 
-//    public static boolean getSavedAutoBrightnessValue(Context context){
-//        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(context.getResources().getString(R.string.SHARED_PREF_AUTO_BRIGHTNESS), false);
-//    }
+    public static boolean getSavedAutoBrightnessValue(Context context){
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(context.getResources().getString(R.string.SHARED_PREF_AUTO_BRIGHTNESS), false);
+    }
 
     private void savePairedDeviceNames() {
         if (savedG1LeftName != null && savedG1RightName != null) {
@@ -974,6 +1040,52 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
             // Check if G1 arm
             if (name == null || !name.contains("Even G1_")) {
                 return;
+            }
+
+            // Log all available device information for debugging
+            Log.d(TAG, "=== Device Information ===");
+            Log.d(TAG, "Device Name: " + name);
+            Log.d(TAG, "Device Address: " + device.getAddress());
+            Log.d(TAG, "Device Type: " + device.getType());
+            Log.d(TAG, "Device Class: " + device.getBluetoothClass());
+            Log.d(TAG, "Bond State: " + device.getBondState());
+            
+            // Try to get additional device information using reflection
+            try {
+                // Try to get the full device name (might contain serial number)
+                Method getAliasMethod = device.getClass().getMethod("getAlias");
+                String alias = (String) getAliasMethod.invoke(device);
+                Log.d(TAG, "Device Alias: " + alias);
+            } catch (Exception e) {
+                Log.d(TAG, "Could not get device alias: " + e.getMessage());
+            }
+
+            // Capture manufacturer data for left device during scanning
+            if (name != null && name.contains("_L_") && result.getScanRecord() != null) {
+                SparseArray<byte[]> allManufacturerData = result.getScanRecord().getManufacturerSpecificData();
+                for (int i = 0; i < allManufacturerData.size(); i++) {
+                    String parsedDeviceName = parsePairingIdFromDeviceName(name);
+                    if (parsedDeviceName != null) {
+                        Log.d(TAG, "Parsed Device Name: " + parsedDeviceName);
+                    }
+
+                    int manufacturerId = allManufacturerData.keyAt(i);
+                    byte[] data = allManufacturerData.valueAt(i);
+                    Log.d(TAG, "Left Device Manufacturer ID " + manufacturerId + ": " + bytesToHex(data));
+                    
+                    // Try to decode serial number from this manufacturer data
+                    String decodedSerial = decodeSerialFromManufacturerData(data);
+                    if (decodedSerial != null) {
+                        Log.d(TAG, "LEFT DEVICE DECODED SERIAL NUMBER from ID " + manufacturerId + ": " + decodedSerial);
+                        String[] decoded = decodeEvenG1SerialNumber(decodedSerial);
+                        Log.d(TAG, "LEFT DEVICE Style: " + decoded[0] + ", Color: " + decoded[1]);
+
+                        if (preferredG1DeviceId != null && preferredG1DeviceId.equals(parsedDeviceName)) {
+                            EventBus.getDefault().post(new GlassesSerialNumberEvent(decodedSerial, decoded[0], decoded[1]));
+                        }
+                        break;
+                    }
+                } 
             }
 
 //            Log.d(TAG, "PREFERRED ID: " + preferredG1DeviceId);
@@ -1156,7 +1268,6 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
         preferredG1DeviceId = getPreferredG1DeviceId(context);
 
         if(!bluetoothAdapter.isEnabled()) {
-
             return;
         }
 
@@ -1187,6 +1298,10 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
         isScanning = true;
         scanner.startScan(filters, settings, modernScanCallback);
         Log.d(TAG, "CALL START SCAN - Started scanning for devices...");
+        
+        // Ensure scanning state is immediately communicated to UI
+        connectionState = SmartGlassesConnectionState.SCANNING;
+        connectionEvent(connectionState);
 
         // Stop the scan after some time (e.g., 10-15s instead of 60 to avoid throttling)
         //handler.postDelayed(() -> stopScan(), 10000);
@@ -1223,6 +1338,11 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
         }
 
         String deviceName = device.getName();
+        if (deviceName == null) {
+            Log.d(TAG, "Skipping null device name: " + device.getAddress() + "... this means something horriffic has occured. Look into this.");
+            return;
+        }
+
         Log.d(TAG, "attemptGattConnection called for device: " + deviceName + " (" + device.getAddress() + ")");
 
         // Check if both devices are bonded before attempting connection
@@ -1805,6 +1925,7 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     public void blankScreen() {}
 
     public void displayDoubleTextWall(String textTop, String textBottom) {
+        if (updatingScreen) return;
         List<byte[]> chunks = createDoubleTextWallChunks(textTop, textBottom);
         sendChunks(chunks);
     }
@@ -1842,8 +1963,14 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     public void displayReferenceCardImage(String title, String body, String imgUrl) {}
 
     public void displayTextWall(String a) {
+        if (updatingScreen) return;
         List<byte[]> chunks = createTextWallChunks(a);
         sendChunks(chunks);
+    }
+
+    @Override
+    public void setUpdatingScreen(boolean updatingScreen) {
+        this.updatingScreen = updatingScreen;
     }
 
     public void setFontSizes() {}
@@ -2137,15 +2264,13 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     }
 
     @Override
-    public void updateGlassesDashboardHeight(int height) {
-        // TODO: get depth from settings!
-        sendDashboardPositionCommand(height, 0);
+    public void updateGlassesDepthHeight(int depth, int height) {
+        sendDashboardPositionCommand(height, depth);
     }
 
     @Override
-    public void updateGlassesDepth(int depth) {
-        // TODO: get height from settings!
-        sendDashboardPositionCommand(0, depth);
+    public void sendExitCommand() {
+        sendDataSequentially(new byte[]{(byte) 0x18}, false, 100);
     }
     
 
@@ -2798,6 +2923,7 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     }
 
     private void sendBmpChunks(List<byte[]> chunks) {
+        if (updatingScreen) return;
         for (int i = 0; i < chunks.size(); i++) {
             byte[] chunk = chunks.get(i);
             Log.d(TAG, "Sending chunk " + i + " of " + chunks.size() + ", size: " + chunk.length);
@@ -2812,6 +2938,7 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     }
 
     private void sendBmpEndCommand() {
+        if (updatingScreen) return;
         Log.d(TAG, "Sending BMP end command");
         sendDataSequentially(END_COMMAND);
 
@@ -2857,12 +2984,14 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     }
 
     public void clearBmpDisplay() {
+        if (updatingScreen) return;
         Log.d(TAG, "Clearing BMP display with EXIT command");
         byte[] exitCommand = new byte[]{0x18};
         sendDataSequentially(exitCommand);
     }
 
     private void sendLoremIpsum(){
+        if (updatingScreen) return;
         String text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. ";
         sendDataSequentially(createTextWallChunks(text));
     }
@@ -2875,13 +3004,18 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
     @Override
     public void changeSmartGlassesMicrophoneState(boolean isMicrophoneEnabled) {
         Log.d(TAG, "Microphone state changed: " + isMicrophoneEnabled);
+        
+        // Update the shouldUseGlassesMic flag to reflect the current state
+        this.shouldUseGlassesMic = isMicrophoneEnabled && SmartGlassesManager.getSensingEnabled(context);// && !SmartGlassesManager.getForceCoreOnboardMic(context);
+        Log.d(TAG, "Updated shouldUseGlassesMic to: " + shouldUseGlassesMic);
+        
         if (isMicrophoneEnabled) {
             Log.d(TAG, "Microphone enabled, starting audio input handling");
-            // setMicEnabled(true, 10);
+            setMicEnabled(true, 10);
             startMicBeat((int) MICBEAT_INTERVAL_MS);
         } else {
             Log.d(TAG, "Microphone disabled, stopping audio input handling");
-            // setMicEnabled(false, 10);
+            setMicEnabled(false, 10);
             stopMicBeat();
         }
     }
@@ -2892,5 +3026,89 @@ public class EvenRealitiesG1SGC extends SmartGlassesCommunicator {
      */
     public boolean isMicrophoneEnabled() {
         return isMicrophoneEnabled;
+    }
+
+    /**
+     * Decodes Even G1 serial number to extract style and color information
+     * @param serialNumber The full serial number (e.g., "S110LABD020021")
+     * @return Array containing [style, color] or ["Unknown", "Unknown"] if invalid
+     */
+    public static String[] decodeEvenG1SerialNumber(String serialNumber) {
+        if (serialNumber == null || serialNumber.length() < 6) {
+            return new String[]{"Unknown", "Unknown"};
+        }
+
+        // Style mapping: 3rd character (index 2)
+        String style;
+        switch (serialNumber.charAt(1)) {
+            case '0':
+                style = "Round";
+                break;
+            case '1':
+                style = "Rectangular";
+                break;
+            default:
+                style = "Round";
+                break;
+        }
+
+        // Color mapping: 5th character (index 4)
+        String color;
+        switch (serialNumber.charAt(4)) {
+            case 'A':
+                color = "Grey";
+                break;
+            case 'B':
+                color = "Brown";
+                break;
+            case 'C':
+                color = "Green";
+                break;
+            default:
+                color = "Grey";
+                break;
+        }
+
+        return new String[]{style, color};
+    }
+
+    /**
+     * Decodes serial number from manufacturer data bytes
+     * @param manufacturerData The manufacturer data bytes
+     * @return Decoded serial number string or null if not found
+     */
+    private String decodeSerialFromManufacturerData(byte[] manufacturerData) {
+        if (manufacturerData == null || manufacturerData.length < 10) {
+            return null;
+        }
+        
+        try {
+            // Convert hex bytes to ASCII string
+            StringBuilder serialBuilder = new StringBuilder();
+            for (int i = 0; i < manufacturerData.length; i++) {
+                byte b = manufacturerData[i];
+                if (b == 0x00) {
+                    // Stop at null terminator
+                    break;
+                }
+                if (b >= 0x20 && b <= 0x7E) {
+                    // Only include printable ASCII characters
+                    serialBuilder.append((char) b);
+                }
+            }
+            
+            String decodedString = serialBuilder.toString().trim();
+            
+            // Check if it looks like a valid Even G1 serial number
+            if (decodedString.length() >= 12 && 
+                (decodedString.startsWith("S1") || decodedString.startsWith("100") || decodedString.startsWith("110"))) {
+                return decodedString;
+            }
+            
+            return null;
+        } catch (Exception e) {
+            Log.e(TAG, "Error decoding manufacturer data: " + e.getMessage());
+            return null;
+        }
     }
 }

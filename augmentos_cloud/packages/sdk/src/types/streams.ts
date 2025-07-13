@@ -1,9 +1,11 @@
 // src/streams.ts
 
+import { Stream } from "form-data";
+
 /**
- * Types of streams that TPAs can subscribe to
+ * Types of streams that Apps can subscribe to
  * 
- * These are events and data that TPAs can receive from the cloud.
+ * These are events and data that Apps can receive from the cloud.
  * Not all message types can be subscribed to as streams.
  */
 export enum StreamType {
@@ -14,6 +16,8 @@ export enum StreamType {
   PHONE_BATTERY_UPDATE = 'phone_battery_update',
   GLASSES_CONNECTION_STATE = 'glasses_connection_state',
   LOCATION_UPDATE = 'location_update',
+  LOCATION_STREAM = 'location_stream',
+  VPS_COORDINATES = 'vps_coordinates',
   
   // Audio streams
   TRANSCRIPTION = 'transcription',
@@ -35,20 +39,24 @@ export enum StreamType {
   // Video streams
   VIDEO = 'video',
   PHOTO_REQUEST = 'photo_request',
-  VIDEO_STREAM_REQUEST = 'video_stream_request',
 
   // Media streams
   MEDIA_STATE = 'media_state',
   MEDIA_METADATA = 'media_metadata',
   MEDIA_SESSION_ENDED = 'media_session_ended',
   
+  PHOTO_RESPONSE = 'photo_response',
+  RTMP_STREAM_STATUS = "rtmp_stream_status",
+  MANAGED_STREAM_STATUS = "managed_stream_status",
+
   // Special subscription types
   ALL = 'all',
   WILDCARD = '*',
   
   // New stream type
-  AUGMENTOS_SETTINGS_UPDATE_REQUEST = 'settings_update_request',
-  CUSTOM_MESSAGE = 'custom_message'
+  MENTRAOS_SETTINGS_UPDATE_REQUEST = 'settings_update_request',
+  CUSTOM_MESSAGE = 'custom_message',
+  PHOTO_TAKEN = 'photo_taken',
 }
 
 /**
@@ -84,6 +92,8 @@ export const STREAM_CATEGORIES: Record<StreamType, StreamCategory> = {
   [StreamType.PHONE_BATTERY_UPDATE]: StreamCategory.HARDWARE,
   [StreamType.GLASSES_CONNECTION_STATE]: StreamCategory.HARDWARE,
   [StreamType.LOCATION_UPDATE]: StreamCategory.HARDWARE,
+  [StreamType.LOCATION_STREAM]: StreamCategory.HARDWARE,
+  [StreamType.VPS_COORDINATES]: StreamCategory.HARDWARE,
   
   [StreamType.TRANSCRIPTION]: StreamCategory.AUDIO,
   [StreamType.TRANSLATION]: StreamCategory.AUDIO,
@@ -100,13 +110,19 @@ export const STREAM_CATEGORIES: Record<StreamType, StreamCategory> = {
   
   [StreamType.VIDEO]: StreamCategory.HARDWARE,
   [StreamType.PHOTO_REQUEST]: StreamCategory.HARDWARE,
-  [StreamType.VIDEO_STREAM_REQUEST]: StreamCategory.HARDWARE,
-  
+  [StreamType.PHOTO_RESPONSE]: StreamCategory.HARDWARE,
+  [StreamType.RTMP_STREAM_STATUS]: StreamCategory.HARDWARE,
+  [StreamType.MANAGED_STREAM_STATUS]: StreamCategory.HARDWARE,
   [StreamType.ALL]: StreamCategory.SYSTEM,
   [StreamType.WILDCARD]: StreamCategory.SYSTEM,
   
-  [StreamType.AUGMENTOS_SETTINGS_UPDATE_REQUEST]: StreamCategory.SYSTEM,
-  [StreamType.CUSTOM_MESSAGE]: StreamCategory.SYSTEM
+  [StreamType.MENTRAOS_SETTINGS_UPDATE_REQUEST]: StreamCategory.SYSTEM,
+  [StreamType.CUSTOM_MESSAGE]: StreamCategory.SYSTEM,
+  [StreamType.PHOTO_TAKEN]: StreamCategory.HARDWARE,
+
+  [StreamType.MEDIA_STATE]: StreamCategory.PHONE,
+  [StreamType.MEDIA_METADATA]: StreamCategory.PHONE,
+  [StreamType.MEDIA_SESSION_ENDED]: StreamCategory.PHONE,
 };
 
 /**
@@ -139,7 +155,7 @@ export interface LanguageStreamInfo {
  * Simple validation for language code format: xx-XX (e.g., en-US)
  */
 export function isValidLanguageCode(code: string): boolean {
-  return /^[a-z]{2}-[A-Z]{2}$/.test(code);
+  return /^[a-z]{2,3}-[A-Z]{2}$/.test(code);
 }
 
 /**
@@ -293,4 +309,11 @@ export function isLanguageStream(subscription: ExtendedStreamType): boolean {
  */
 export function getLanguageInfo(subscription: ExtendedStreamType): LanguageStreamInfo | null {
   return parseLanguageStream(subscription);
+}
+
+// this is the blueprint for our new rich subscription object
+// it allows a developer to specify a rate for the location stream
+export interface LocationStreamRequest {
+  stream: 'location_stream';
+  rate: 'standard' | 'high' | 'realtime' | 'tenMeters' | 'hundredMeters' | 'kilometer' | 'threeKilometers' | 'reduced';
 }

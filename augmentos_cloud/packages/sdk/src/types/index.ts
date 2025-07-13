@@ -8,11 +8,51 @@ export * from './message-types';
 // Base message type
 export * from './messages/base';
 
-// Messages by direction
+// Messages by direction - export everything except the conflicting type guards
 export * from './messages/glasses-to-cloud';
 export * from './messages/cloud-to-glasses';
-export * from './messages/tpa-to-cloud';
-export * from './messages/cloud-to-tpa';
+export * from './messages/app-to-cloud';
+
+// Export cloud-to-app but exclude the conflicting type guards
+export {
+  // Types
+  AppConnectionAck,
+  AppConnectionError,
+  AppStopped,
+  SettingsUpdate as AppSettingsUpdate,  // Alias to avoid conflict with cloud-to-glasses SettingsUpdate
+  DataStream,
+  CloudToAppMessage,
+  AudioPlayResponse,
+  TranslationData,
+  ToolCall,
+  StandardConnectionError,
+  CustomMessage,
+  ManagedStreamStatus,
+  OutputStatus,
+  MentraosSettingsUpdate,
+  TranscriptionData,
+  AudioChunk,
+  PermissionError,
+  PermissionErrorDetail,
+  MediaStateUpdate,
+  MediaMetadataUpdate,
+  MediaSessionEndedUpdate,
+  // Type guards (excluding isPhotoResponse and isRtmpStreamStatus which conflict)
+  isAppConnectionAck,
+  isAppConnectionError,
+  isAppStopped,
+  isSettingsUpdate,
+  isDataStream,
+  isAudioChunk,
+  isAudioPlayResponse,
+  isDashboardModeChanged,
+  isDashboardAlwaysOnChanged,
+  isManagedStreamStatus,
+  // Re-export the cloud-to-app versions of these type guards since they're the ones
+  // that should be used when dealing with CloudToAppMessage types
+  isPhotoResponse as isPhotoResponseFromCloud,
+  isRtmpStreamStatus as isRtmpStreamStatusFromCloud
+} from './messages/cloud-to-app';
 
 // Stream types
 export * from './streams';
@@ -25,6 +65,8 @@ export * from './dashboard';
 
 // Media types
 export * from './media';
+// RTMP streaming types
+export * from './rtmp-stream';
 
 // Other system enums
 export * from './enums';
@@ -38,6 +80,11 @@ export * from './user-session';
 // Webhook interfaces
 export * from './webhooks';
 
+// Capability Discovery types
+export * from './capabilities';
+
+// Photo data types
+export * from './photo-data';
 
 // Re-export common types for convenience
 // This allows developers to import commonly used types directly from the package root
@@ -62,7 +109,8 @@ export {
   OpenDashboard,
   GlassesToCloudMessage,
   PhotoResponse,
-  VideoStreamResponse,
+  RtmpStreamStatus,
+  KeepAliveAck
 } from './messages/glasses-to-cloud';
 
 // From messages/cloud-to-glasses.ts
@@ -73,30 +121,27 @@ export {
   DisplayEvent,
   AppStateChange,
   MicrophoneStateChange,
-  CloudToGlassesMessage
+  CloudToGlassesMessage,
+  PhotoRequestToGlasses,
+  AudioPlayRequestToGlasses,
+  AudioStopRequestToGlasses,
+  SettingsUpdate,
+  StartRtmpStream,
+  StopRtmpStream,
+  KeepRtmpStreamAlive
 } from './messages/cloud-to-glasses';
 
-// From messages/tpa-to-cloud.ts
+// From messages/app-to-cloud.ts
 export {
-  TpaConnectionInit,
-  TpaSubscriptionUpdate,
-  TpaToCloudMessage
-} from './messages/tpa-to-cloud';
-
-// From messages/cloud-to-tpa.ts
-export {
-  TpaConnectionAck,
-  TpaConnectionError,
-  AppStopped,
-  SettingsUpdate,
-  DataStream,
-  CloudToTpaMessage,
-  TranslationData,
-  ToolCall,
-  MediaStateUpdate,
-  MediaMetadataUpdate,
-  MediaSessionEndedUpdate,
-} from './messages/cloud-to-tpa';
+  AppConnectionInit,
+  AppSubscriptionUpdate,
+  AudioPlayRequest,
+  AudioStopRequest,
+  RtmpStreamRequest,
+  RtmpStreamStopRequest,
+  AppToCloudMessage,
+  PhotoRequest
+} from './messages/app-to-cloud';
 
 // From layout.ts
 export {
@@ -114,7 +159,10 @@ export {
   isHeadPosition,
   isConnectionInit,
   isStartApp,
-  isStopApp
+  isStopApp,
+  isPhotoResponse as isPhotoResponseFromGlasses,
+  isRtmpStreamStatus as isRtmpStreamStatusFromGlasses,
+  isKeepAliveAck
 } from './messages/glasses-to-cloud';
 
 export {
@@ -122,33 +170,42 @@ export {
   isDisplayEvent,
   isAppStateChange,
   isPhotoRequest,
-  isVideoStreamRequest
+  isAudioPlayRequestToGlasses,
+  isAudioStopRequestToGlasses,
+  isSettingsUpdate as isSettingsUpdateToGlasses,
+  isStartRtmpStream,
+  isStopRtmpStream,
+  isKeepRtmpStreamAlive
 } from './messages/cloud-to-glasses';
 
 export {
-  isTpaConnectionInit,
-  isTpaSubscriptionUpdate,
-  isDisplayRequest
-} from './messages/tpa-to-cloud';
-
-export {
-  isTpaConnectionAck,
-  isDataStream,
-  isAppStopped,
-  isSettingsUpdate
-} from './messages/cloud-to-tpa';
+  isAppConnectionInit,
+  isAppSubscriptionUpdate,
+  isDisplayRequest,
+  isAudioPlayRequest,
+  isAudioStopRequest,
+  isRtmpStreamRequest,
+  isRtmpStreamStopRequest,
+  isPhotoRequest as isPhotoRequestFromApp
+} from './messages/app-to-cloud';
 
 // Export setting-related types
 export {
   BaseAppSetting,
   AppSetting,
   AppSettings,
-  TpaConfig,
-  validateTpaConfig,
+  AppConfig,
+  validateAppConfig,
   ToolSchema,
   ToolParameterSchema
 } from './models';
-
+// Export RTMP streaming types
+export {
+  VideoConfig,
+  AudioConfig,
+  StreamConfig,
+  StreamStatusHandler
+} from './rtmp-stream';
 
 /**
  * WebSocket error information
